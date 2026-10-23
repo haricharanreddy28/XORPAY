@@ -4,57 +4,27 @@ import 'package:xorpay_ui/xorpay_ui.dart';
 
 import 'card_service.dart';
 import 'card_tokenizer.dart';
+import 'nfc/nfc_card_view.dart';
+import 'scan/scan_card_view.dart';
 
-/// Add-card (spec §3.2, §7.7). Manual entry first, with a live card preview;
-/// Scan and Tap(NFC) tabs come in the next slice.
+/// Add-card (spec §3.2, §7.7): Manual, Scan (OCR) and Tap (NFC). Scan and NFC
+/// prefill the manual form, where the user confirms and taps Add.
 ///
-/// Compliance: the PAN + CVV are entered here, tokenised via [CardTokenizer],
-/// and ONLY the token is sent to the backend. They are never persisted or
-/// transmitted to our servers.
-class AddCardScreen extends StatelessWidget {
+/// Compliance: the PAN + CVV live only on-device; they are tokenised via
+/// [CardTokenizer] and ONLY the token is sent to the backend.
+class AddCardScreen extends StatefulWidget {
   const AddCardScreen({super.key, this.tokenizer});
   final CardTokenizer? tokenizer;
 
   @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Add card'),
-          bottom: const TabBar(tabs: [
-            Tab(text: 'Manual'),
-            Tab(text: 'Scan'),
-            Tab(text: 'Tap'),
-          ]),
-        ),
-        body: TabBarView(
-          children: [
-            _ManualTab(tokenizer: tokenizer ?? StubCardTokenizer()),
-            const _ComingSoon(
-              icon: Icons.document_scanner_outlined,
-              label: 'Card scanning (OCR) arrives in the next slice.',
-            ),
-            const _ComingSoon(
-              icon: Icons.nfc_rounded,
-              label: 'NFC tap-to-add arrives in the next slice.',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  State<AddCardScreen> createState() => _AddCardScreenState();
 }
 
-class _ManualTab extends StatefulWidget {
-  const _ManualTab({required this.tokenizer});
-  final CardTokenizer tokenizer;
+class _AddCardScreenState extends State<AddCardScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tab = TabController(length: 3, vsync: this);
+  late final CardTokenizer _tokenizer = widget.tokenizer ?? StubCardTokenizer();
 
-  @override
-  State<_ManualTab> createState() => _ManualTabState();
-}
-
-class _ManualTabState extends State<_ManualTab> {
   final _number = TextEditingController();
   final _expiry = TextEditingController();
   final _cvv = TextEditingController();
@@ -67,31 +37,36 @@ class _ManualTabState extends State<_ManualTab> {
   CardNetwork get _network => detectCardNetwork(_digits);
   int get _cvvLen => _network == CardNetwork.amex ? 4 : 3;
 
-  bool get _valid {
-    final exp = _parseExpiry();
-    return _digits.length >= 13 &&
-        _digits.length <= 19 &&
-        exp != null &&
-        _cvv.text.length == _cvvLen;
-  }
-
   ({int m, int y})? _parseExpiry() {
-    final t = _expiry.text;
-    final m = RegExp(r'^(\d{2})/(\d{2})$').firstMatch(t);
+    final m = RegExp(r'^(\d{2})/(\d{2})$').firstMatch(_expiry.text);
     if (m == null) return null;
     final mm = int.parse(m.group(1)!);
-    final yy = int.parse(m.group(2)!);
     if (mm < 1 || mm > 12) return null;
-    return (m: mm, y: 2000 + yy);
+    return (m: mm, y: 2000 + int.parse(m.group(2)!));
   }
 
-  @override
-  void dispose() {
-    _number.dispose();
-    _expiry.dispose();
-    _cvv.dispose();
-    _name.dispose();
-    super.dispose();
+  bool get _valid =>
+      _digits.length >= 13 &&
+      _digits.length <= 19 &&
+      _parseExpiry() != null &&
+      _cvv.text.length == _cvvLen;
+
+  /// Called by Scan/NFC with detected values; prefills + jumps to Manual.
+  void _prefill(String? number, String? expiry) {
+    setState(() {
+      if (number != null) {
+        final d = number.replaceAll(RegExp(r'\D'), '');
+        final buf = StringBuffer();
+        for (var i = 0; i < d.length; i++) {
+          if (i != 0 && i % 4 == 0) buf.write(' ');
+          buf.write(d[i]);
+        }
+        _number.text = buf.toString();
+      }
+      if (expiry != null) _expiry.text = expiry;
+      _error = null;
+    });
+    _tab.animateTo(0);
   }
 
   Future<void> _save() async {
@@ -102,8 +77,7 @@ class _ManualTabState extends State<_ManualTab> {
       _error = null;
     });
     try {
-      // PAN/CVV go only to the tokenizer; only the token leaves the device.
-      final token = await widget.tokenizer.tokenize(CardDetails(
+      final token = await _tokenizer.tokenize(CardDetails(
         number: _digits,
         expiryMonth: exp.m,
         expiryYear: exp.y,
@@ -120,25 +94,56 @@ class _ManualTabState extends State<_ManualTab> {
   }
 
   @override
+  void dispose() {
+    _tab.dispose();
+    _number.dispose();
+    _expiry.dispose();
+    _cvv.dispose();
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Add card'),
+        bottom: TabBar(controller: _tab, tabs: const [
+          Tab(text: 'Manual'),
+          Tab(text: 'Scan'),
+          Tab(text: 'Tap'),
+        ]),
+      ),
+      body: TabBarView(
+        controller: _tab,
+        children: [
+          _manualTab(context),
+          ScanCardView(onExtracted: _prefill),
+          NfcCardView(onExtracted: _prefill),
+        ],
+      ),
+    );
+  }
+
+  Widget _manualTab(BuildContext context) {
+    final xc = context.xc;
     final exp = _parseExpiry();
-    final last4 = _digits.length >= 4 ? _digits.substring(_digits.length - 4) : '––––';
+    final last4 =
+        _digits.length >= 4 ? _digits.substring(_digits.length - 4) : '––––';
 
     return ListView(
       padding: const EdgeInsets.all(XSpacing.xl),
       children: [
-        // Live preview.
         XCard3D(
           last4: last4,
           network: _network,
           holderName: _name.text,
           expiry: exp != null
-              ? '${exp.m.toString().padLeft(2, '0')}/${(exp.y % 100)}'
+              ? '${exp.m.toString().padLeft(2, '0')}/${exp.y % 100}'
               : null,
           tilt: false,
         ),
         const SizedBox(height: XSpacing.xxl),
-
         TextField(
           controller: _number,
           keyboardType: TextInputType.number,
@@ -189,17 +194,15 @@ class _ManualTabState extends State<_ManualTab> {
           onChanged: (_) => setState(() {}),
           decoration: const InputDecoration(labelText: 'Name on card (optional)'),
         ),
-
         if (_error != null) ...[
           const SizedBox(height: XSpacing.md),
-          Text(_error!, style: XType.caption.copyWith(color: context.xc.error)),
+          Text(_error!, style: XType.caption.copyWith(color: xc.error)),
         ],
-
         const SizedBox(height: XSpacing.md),
         Text(
           '🔒 Your card details are tokenised by our payment partner. '
           'XORPAY never stores your card number or CVV.',
-          style: XType.caption.copyWith(color: context.xc.textMuted),
+          style: XType.caption.copyWith(color: xc.textMuted),
         ),
         const SizedBox(height: XSpacing.xl),
         XButton(
@@ -239,32 +242,6 @@ class _ExpiryFormatter extends TextInputFormatter {
     return TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
-    );
-  }
-}
-
-class _ComingSoon extends StatelessWidget {
-  const _ComingSoon({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final xc = context.xc;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(XSpacing.xxxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 64, color: xc.textMuted),
-            const SizedBox(height: XSpacing.lg),
-            Text(label,
-                textAlign: TextAlign.center,
-                style: XType.body.copyWith(color: xc.textSecondary)),
-          ],
-        ),
-      ),
     );
   }
 }

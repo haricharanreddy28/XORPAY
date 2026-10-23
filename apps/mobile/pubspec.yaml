@@ -28,6 +28,14 @@ dependencies:
   # QR / barcode scanning (wraps Google ML Kit)
   mobile_scanner: ^5.2.3
 
+  # Card scan (OCR): camera + ML Kit text recognition
+  camera: ^0.11.0+2
+  google_mlkit_text_recognition: ^0.13.1
+
+  # NFC tap-to-add (Android; reads EMV Track-2). iOS contactless is restricted.
+  nfc_manager: ^4.0.2
+  nfc_manager_android: ^4.0.2
+
   # State management (lightweight)
   provider: ^6.1.2
 

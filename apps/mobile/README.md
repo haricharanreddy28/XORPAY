@@ -8,6 +8,14 @@ plug in **your own** backend and licensed payment provider.
 > This is greenfield code written from scratch. It is a reference architecture,
 > not a copy of any existing app.
 
+## Native permissions (after `flutter create .`)
+Add-card Scan/NFC need platform permissions the starter doesn't auto-generate:
+- **Android** `AndroidManifest.xml`: `<uses-permission android:name="android.permission.CAMERA"/>`
+  and `<uses-permission android:name="android.permission.NFC"/>`. NFC EMV read is
+  Android-only and best-effort (see `lib/cards/nfc/`).
+- **iOS** `Info.plist`: `NSCameraUsageDescription`. iOS restricts EMV contactless
+  reads, so the NFC tab targets Android.
+
 ## Before you build: you can't move money by yourself
 
 A payments app in India sits on top of RBI-regulated rails. Pick a path:
