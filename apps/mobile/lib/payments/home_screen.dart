@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:xorpay_ui/xorpay_ui.dart';
 
 import '../auth/session.dart';
+import '../beneficiaries/beneficiaries_screen.dart';
 import '../business/business_profile_screen.dart';
 import '../cards/cards_screen.dart';
 import '../limits/limits_service.dart';
@@ -40,6 +41,12 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openCards() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const CardsScreen()),
+    );
+  }
+
+  void _openPayees() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const BeneficiariesScreen()),
     );
   }
 
@@ -104,6 +111,12 @@ class _HomeScreenState extends State<HomeScreen> {
               label: 'Scan & Pay',
               icon: Icons.qr_code_scanner,
               onPressed: _scanAndPay,
+            ),
+            const SizedBox(height: XSpacing.md),
+            XButton.secondary(
+              label: 'Payees',
+              icon: Icons.group_outlined,
+              onPressed: _openPayees,
             ),
             const SizedBox(height: XSpacing.md),
             XButton.secondary(
