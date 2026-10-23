@@ -42,10 +42,31 @@ flutter run \
 |---|---|
 | `POST /auth/otp/request` | stub: logs the OTP (always `123456`) |
 | `POST /auth/otp/verify` | stub: returns a test token |
-| `POST /payments/orders` | creates a Cashfree order → `payment_session_id` |
+| `POST /kyc/pan` | verify PAN (provider) |
+| `POST /kyc/gstin` | verify GSTIN → higher tier |
+| `POST /kyc/aadhaar/init` · `/aadhaar/complete` | DigiLocker/OKYC start + finish |
+| `POST /kyc/selfie/session` · `/selfie/complete` | liveness session + result |
+| `GET /kyc/status` | current KYC state + derived tier |
+| `GET /limits` | caps for the user + remaining today/month |
+| `POST /limits/check` | pre-check an amount before checkout |
+| `POST /payments/orders` | enforces limits, then creates a Cashfree order |
 | `POST /payments/confirm` | reads real status from Cashfree |
 | `POST /webhooks/cashfree` | Cashfree's authoritative callback (set as notify URL) |
-| `GET /health` | liveness |
+| `GET /health` | liveness (`payments` flag shows if Cashfree is configured) |
+
+## KYC & limits (Phase 2)
+- **Provider is swappable** (`src/kyc/`): a deterministic **stub** runs by default
+  (and in CI); set `KYC_PROVIDER=hyperverge` + `HYPERVERGE_APP_ID`/`HYPERVERGE_APP_KEY`
+  to use the HyperVerge adapter (endpoints marked TODO to confirm against your docs).
+- **Limits engine** (`src/limits/limitsEngine.js`) is pure and unit-tested
+  (`npm test`): KYC tier → per-transaction / daily / monthly caps, with a lower
+  cap for unverified beneficiaries. It's enforced server-side in `/payments/orders`.
+- Spend tracking is stubbed at 0 until the ledger lands (Phase 4).
+
+## Test
+```bash
+npm test   # node --test — runs the limits engine suite
+```
 
 ## Before production (do not skip)
 - Replace stubbed OTP + base64 tokens with real auth (JWT/session, device binding).

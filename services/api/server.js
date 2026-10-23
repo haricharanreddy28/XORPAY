@@ -1,15 +1,21 @@
-// Minimal Cashfree SANDBOX test backend for the Xorpay Flutter app.
+// XORPAY API (dev/sandbox). Express today; NestJS + Prisma migration is Phase 4.
 //
-// PURPOSE: let you run a real Cashfree checkout end-to-end with TEST money.
-// NOT production: in-memory store, stubbed OTP auth, trivial tokens. Replace
-// the auth + storage before anything real.
+// Serves: stubbed OTP auth, Cashfree sandbox payments, KYC verification
+// (via a swappable provider), and the limits engine. In-memory stores.
+// NOT production — see each module's notes.
 //
-// Run:  CASHFREE_APP_ID=... CASHFREE_SECRET_KEY=... node server.js
-// Then expose it over HTTPS (e.g. `ngrok http 8080`) and point the app's
-// API_BASE_URL at the tunnel URL.
+// Run:  node server.js
+//   Cashfree payments need CASHFREE_APP_ID / CASHFREE_SECRET_KEY; without them
+//   the payment routes return 503 but auth/KYC/limits still work.
 
 import express from "express";
 import crypto from "node:crypto";
+
+import { makeToken, requireAuth } from "./src/auth.js";
+import { orders, getKyc, getSpend } from "./src/store.js";
+import { kycRoutes } from "./src/kyc/kycRoutes.js";
+import { limitsRoutes } from "./src/limits/limitsRoutes.js";
+import { tierForKyc, evaluate } from "./src/limits/limitsEngine.js";
 
 const {
   CASHFREE_APP_ID,
@@ -18,9 +24,12 @@ const {
   PORT = 8080,
 } = process.env;
 
-if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
-  console.error("Set CASHFREE_APP_ID and CASHFREE_SECRET_KEY (sandbox keys).");
-  process.exit(1);
+const cashfreeConfigured = !!(CASHFREE_APP_ID && CASHFREE_SECRET_KEY);
+if (!cashfreeConfigured) {
+  console.warn(
+    "[warn] CASHFREE_APP_ID/SECRET not set — payment routes return 503. " +
+      "Auth, KYC and limits still work.",
+  );
 }
 
 const CF_BASE =
@@ -35,21 +44,7 @@ const cfHeaders = {
   "Content-Type": "application/json",
 };
 
-// --- in-memory stores (reset on restart) --------------------------------
-const orders = new Map(); // order_id -> { amountMinor, phone, status }
-
-// Trivial test token: base64(phone). DO NOT ship this; use real JWTs/session.
-const makeToken = (phone) => Buffer.from(phone).toString("base64");
-const phoneFromToken = (t) => {
-  try {
-    return Buffer.from(t, "base64").toString("utf8");
-  } catch {
-    return null;
-  }
-};
-
 const app = express();
-// Capture raw body (needed for webhook signature verification).
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -57,17 +52,6 @@ app.use(
     },
   })
 );
-
-function requirePhone(req, res) {
-  const auth = req.headers.authorization || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-  const phone = token && phoneFromToken(token);
-  if (!phone) {
-    res.status(401).json({ error: "unauthorized" });
-    return null;
-  }
-  return phone;
-}
 
 // --- stubbed auth (so the app's OTP login works) -------------------------
 // Test OTP is always "123456".
@@ -84,15 +68,37 @@ app.post("/auth/otp/verify", (req, res) => {
   res.json({ access_token: makeToken(phone), refresh_token: null });
 });
 
-// --- payments ------------------------------------------------------------
-// 1) Create a Cashfree order.
-app.post("/payments/orders", async (req, res) => {
-  const phone = requirePhone(req, res);
-  if (!phone) return;
+// --- KYC + limits --------------------------------------------------------
+app.use("/kyc", kycRoutes());
+app.use("/limits", limitsRoutes());
 
-  const { amount, currency = "INR" } = req.body || {};
+// --- payments ------------------------------------------------------------
+function requireCashfree(_req, res, next) {
+  if (!cashfreeConfigured) {
+    return res.status(503).json({ error: "payments_not_configured" });
+  }
+  next();
+}
+
+// 1) Create a Cashfree order — enforces KYC/limits first.
+app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
+  const { amount, currency = "INR", beneficiaryVerified = true } = req.body || {};
   if (!Number.isInteger(amount) || amount <= 0) {
     return res.status(400).json({ error: "invalid_amount" });
+  }
+
+  // Server-side limits enforcement (never trust the client).
+  const kyc = getKyc(req.phone);
+  const { spentTodayMinor, spentMonthMinor } = getSpend(req.phone);
+  const decision = evaluate({
+    tier: tierForKyc(kyc),
+    amountMinor: amount,
+    spentTodayMinor,
+    spentMonthMinor,
+    beneficiaryVerified,
+  });
+  if (!decision.allowed) {
+    return res.status(403).json({ error: "limit_exceeded", reason: decision.reason });
   }
 
   const orderId = "ord_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
@@ -107,8 +113,9 @@ app.post("/payments/orders", async (req, res) => {
         order_amount: orderAmount,
         order_currency: currency,
         customer_details: {
-          customer_id: "usr_" + crypto.createHash("sha1").update(phone).digest("hex").slice(0, 10),
-          customer_phone: phone,
+          customer_id:
+            "usr_" + crypto.createHash("sha1").update(req.phone).digest("hex").slice(0, 10),
+          customer_phone: req.phone,
         },
       }),
     });
@@ -117,11 +124,8 @@ app.post("/payments/orders", async (req, res) => {
       console.error("[cashfree create]", r.status, data);
       return res.status(502).json({ error: "psp_unavailable", detail: data });
     }
-    orders.set(orderId, { amountMinor: amount, phone, status: "CREATED" });
-    res.json({
-      order_id: orderId,
-      payment_session_id: data.payment_session_id,
-    });
+    orders.set(orderId, { amountMinor: amount, phone: req.phone, status: "CREATED" });
+    res.json({ order_id: orderId, payment_session_id: data.payment_session_id });
   } catch (e) {
     console.error("[cashfree create] threw", e);
     res.status(502).json({ error: "psp_unavailable" });
@@ -129,14 +133,11 @@ app.post("/payments/orders", async (req, res) => {
 });
 
 // 2) Confirm: ask Cashfree for the real status (never trust the client).
-app.post("/payments/confirm", async (req, res) => {
-  const phone = requirePhone(req, res);
-  if (!phone) return;
-
+app.post("/payments/confirm", requireAuth, requireCashfree, async (req, res) => {
   const { order_id } = req.body || {};
   const record = order_id && orders.get(order_id);
   if (!record) return res.status(404).json({ error: "unknown_order" });
-  if (record.phone !== phone) return res.status(403).json({ error: "not_owner" });
+  if (record.phone !== req.phone) return res.status(403).json({ error: "not_owner" });
 
   try {
     const r = await fetch(`${CF_BASE}/orders/${order_id}`, {
@@ -158,8 +159,8 @@ app.post("/webhooks/cashfree", (req, res) => {
   const signature = req.headers["x-webhook-signature"];
   const timestamp = req.headers["x-webhook-timestamp"];
   const expected = crypto
-    .createHmac("sha256", CASHFREE_SECRET_KEY)
-    .update(String(timestamp) + req.rawBody.toString("utf8"))
+    .createHmac("sha256", CASHFREE_SECRET_KEY || "")
+    .update(String(timestamp) + (req.rawBody?.toString("utf8") ?? ""))
     .digest("base64");
 
   if (!signature || signature !== expected) {
@@ -177,9 +178,11 @@ app.post("/webhooks/cashfree", (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/health", (_req, res) => res.json({ ok: true, env: CASHFREE_ENV }));
+app.get("/health", (_req, res) =>
+  res.json({ ok: true, env: CASHFREE_ENV, payments: cashfreeConfigured })
+);
 
 app.listen(PORT, () => {
-  console.log(`xorpay test backend on :${PORT} (Cashfree ${CASHFREE_ENV})`);
-  console.log(`Cashfree base: ${CF_BASE}`);
+  console.log(`xorpay api on :${PORT} (Cashfree ${CASHFREE_ENV})`);
+  console.log(`payments: ${cashfreeConfigured ? "enabled" : "disabled (no keys)"}`);
 });

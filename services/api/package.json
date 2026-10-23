@@ -1,15 +1,16 @@
 {
-  "name": "xorpay-test-backend",
-  "version": "0.1.0",
+  "name": "xorpay-api",
+  "version": "0.2.0",
   "private": true,
-  "description": "Minimal Cashfree SANDBOX test backend for the Xorpay Flutter app. Not production.",
+  "description": "XORPAY API (dev/sandbox): auth, Cashfree payments, KYC, limits. NestJS migration in Phase 4.",
   "type": "module",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "express": "^4.21.1"

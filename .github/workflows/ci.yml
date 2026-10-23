@@ -58,3 +58,5 @@ jobs:
       - run: npm install
       # Syntax-check the server without starting it (no keys needed).
       - run: node --check server.js
+      # Unit tests (limits engine etc.) — pure modules, no keys needed.
+      - run: npm test
