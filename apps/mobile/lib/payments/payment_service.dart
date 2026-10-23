@@ -23,9 +23,17 @@ class PaymentResult {
 /// Handle returned by your backend after it creates a Cashfree order.
 /// `paymentSessionId` is what the Cashfree SDK needs to open checkout.
 class OrderHandle {
-  const OrderHandle({required this.orderId, required this.paymentSessionId});
+  const OrderHandle({
+    required this.orderId,
+    required this.paymentSessionId,
+    this.fee,
+  });
   final String orderId;
   final String paymentSessionId;
+
+  /// Authoritative fee breakdown from the server (paise). Keys: payeeMinor,
+  /// feeMinor, gstMinor, chargeMinor, youPayMinor.
+  final Map<String, dynamic>? fee;
 }
 
 /// Cashfree-backed payment flow.
@@ -54,19 +62,28 @@ class PaymentService {
   Completer<PaymentResult>? _pending;
 
   /// Step 1–2: create a Cashfree order via your backend.
+  /// [amountMinor] is what the beneficiary receives; the server adds the fee
+  /// and returns the authoritative breakdown.
   Future<OrderHandle> createOrder({
-    required int amountMinor, // paise; backend converts to Cashfree's rupees
+    required int amountMinor, // paise (payee amount)
     String currency = 'INR',
+    String? category, // 'vendor' | 'rent' | ...
+    String? beneficiaryId,
+    bool beneficiaryVerified = true,
     Map<String, dynamic>? metadata,
   }) async {
     final res = await ApiClient.instance.dio.post('/payments/orders', data: {
       'amount': amountMinor,
       'currency': currency,
+      'beneficiaryVerified': beneficiaryVerified,
+      if (category != null) 'category': category,
+      if (beneficiaryId != null) 'beneficiaryId': beneficiaryId,
       if (metadata != null) 'metadata': metadata,
     });
     return OrderHandle(
       orderId: res.data['order_id'] as String,
       paymentSessionId: res.data['payment_session_id'] as String,
+      fee: (res.data['fee'] as Map?)?.cast<String, dynamic>(),
     );
   }
 

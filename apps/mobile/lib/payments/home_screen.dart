@@ -7,6 +7,8 @@ import '../beneficiaries/beneficiaries_screen.dart';
 import '../business/business_profile_screen.dart';
 import '../cards/cards_screen.dart';
 import '../limits/limits_service.dart';
+import 'rent_pay_screen.dart';
+import 'vendor_pay_screen.dart';
 import 'payment_service.dart';
 import 'payment_status_screen.dart';
 import 'qr_scan_screen.dart';
@@ -48,6 +50,11 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const BeneficiariesScreen()),
     );
+  }
+
+  Future<void> _push(Widget screen) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    _refreshLimits(); // a completed payment consumes limit
   }
 
   Future<void> _scanAndPay() async {
@@ -108,6 +115,18 @@ class _HomeScreenState extends State<HomeScreen> {
             _LimitsCard(future: _limits),
             const SizedBox(height: XSpacing.xl),
             XButton(
+              label: 'Pay vendor',
+              icon: Icons.store_outlined,
+              onPressed: () => _push(const VendorPayScreen()),
+            ),
+            const SizedBox(height: XSpacing.md),
+            XButton.secondary(
+              label: 'Pay rent',
+              icon: Icons.home_outlined,
+              onPressed: () => _push(const RentPayScreen()),
+            ),
+            const SizedBox(height: XSpacing.md),
+            XButton.secondary(
               label: 'Scan & Pay',
               icon: Icons.qr_code_scanner,
               onPressed: _scanAndPay,

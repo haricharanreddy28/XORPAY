@@ -45,6 +45,10 @@ dependencies:
   # Animated payment-state screens
   lottie: ^3.1.2
 
+  # PDF receipts + share/print
+  pdf: ^3.11.1
+  printing: ^5.13.3
+
   # Crash reporting (optional; mirrors Pice's sentry_flutter)
   sentry_flutter: ^8.9.0
 
