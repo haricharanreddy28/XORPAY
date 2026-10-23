@@ -13,6 +13,7 @@ class SecureStore {
   static const _kAccessToken = 'access_token';
   static const _kRefreshToken = 'refresh_token';
   static const _kIntroSeen = 'intro_seen';
+  static const _kKycDone = 'kyc_done';
 
   Future<void> saveTokens({
     required String accessToken,
@@ -32,9 +33,15 @@ class SecureStore {
       (await _storage.read(key: _kIntroSeen)) == '1';
   Future<void> markIntroSeen() => _storage.write(key: _kIntroSeen, value: '1');
 
-  /// Clears auth only — keeps non-auth prefs like [introSeen].
+  /// Whether KYC onboarding has been completed (shell flag; cleared on logout).
+  Future<bool> get kycDone async =>
+      (await _storage.read(key: _kKycDone)) == '1';
+  Future<void> markKycDone() => _storage.write(key: _kKycDone, value: '1');
+
+  /// Clears auth (and KYC) — keeps non-auth prefs like [introSeen].
   Future<void> clear() async {
     await _storage.delete(key: _kAccessToken);
     await _storage.delete(key: _kRefreshToken);
+    await _storage.delete(key: _kKycDone);
   }
 }

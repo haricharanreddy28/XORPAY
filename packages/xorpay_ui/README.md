@@ -45,6 +45,7 @@ Text('Paid', style: TextStyle(color: context.xc.success));
 | `AmountPad` (auto-scale amount, keypad, chips, live breakdown) | `src/components/amount_pad.dart` | §7.5 |
 | `PayeeTile` (gradient initials, verified badge, masked acct) | `src/components/payee_tile.dart` | §7.5 |
 | `XCard3D` (issuer gradient, chip, gyro tilt ±6°) | `src/components/x_card_3d.dart` | §7.5 |
+| `XStepper` (labelled progress stepper, % done) | `src/components/x_stepper.dart` | §7.7 |
 
 > Card network names render as **text labels**, not brand logos (logos are
 > trademarks). `XCard3D` tilt needs a gyroscope; it stays flat where there's none.

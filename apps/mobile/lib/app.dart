@@ -5,6 +5,7 @@ import 'package:xorpay_ui/xorpay_ui.dart';
 import 'auth/biometric_lock.dart';
 import 'auth/session.dart';
 import 'core/secure_storage.dart';
+import 'kyc/kyc_flow.dart';
 import 'onboarding/intro_carousel.dart';
 import 'onboarding/login_screen.dart';
 import 'onboarding/splash_screen.dart';
@@ -37,13 +38,18 @@ class _AppFlow extends StatefulWidget {
 
 class _AppFlowState extends State<_AppFlow> {
   bool _splashDone = false;
-  bool _introSeen = true; // assume seen until we learn otherwise
+  bool _introSeen = true; // assume true until we learn otherwise (avoids flash)
+  bool _kycDone = true;
 
   @override
   void initState() {
     super.initState();
-    SecureStore.instance.introSeen.then((v) {
+    final store = SecureStore.instance;
+    store.introSeen.then((v) {
       if (mounted) setState(() => _introSeen = v);
+    });
+    store.kycDone.then((v) {
+      if (mounted) setState(() => _kycDone = v);
     });
   }
 
@@ -56,6 +62,14 @@ class _AppFlowState extends State<_AppFlow> {
     return Consumer<Session>(
       builder: (context, session, _) {
         if (session.isAuthenticated) {
+          if (!_kycDone) {
+            return KycFlow(
+              onFinish: () {
+                SecureStore.instance.markKycDone();
+                setState(() => _kycDone = true);
+              },
+            );
+          }
           return const BiometricLock(child: HomeScreen());
         }
         if (!_introSeen) {

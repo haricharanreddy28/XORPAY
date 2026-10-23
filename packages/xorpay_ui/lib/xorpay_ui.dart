@@ -20,3 +20,4 @@ export 'src/components/x_button.dart';
 export 'src/components/amount_pad.dart';
 export 'src/components/payee_tile.dart';
 export 'src/components/x_card_3d.dart';
+export 'src/components/x_stepper.dart';
