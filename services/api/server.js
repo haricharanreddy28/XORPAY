@@ -15,6 +15,8 @@ import { makeToken, requireAuth } from "./src/auth.js";
 import { orders, getKyc, getSpend } from "./src/store.js";
 import { kycRoutes } from "./src/kyc/kycRoutes.js";
 import { limitsRoutes } from "./src/limits/limitsRoutes.js";
+import { cardRoutes } from "./src/cards/cardRoutes.js";
+import { beneficiaryRoutes } from "./src/beneficiaries/beneficiaryRoutes.js";
 import { tierForKyc, evaluate } from "./src/limits/limitsEngine.js";
 
 const {
@@ -71,6 +73,10 @@ app.post("/auth/otp/verify", (req, res) => {
 // --- KYC + limits --------------------------------------------------------
 app.use("/kyc", kycRoutes());
 app.use("/limits", limitsRoutes());
+
+// --- cards + beneficiaries ----------------------------------------------
+app.use("/cards", cardRoutes());
+app.use("/beneficiaries", beneficiaryRoutes());
 
 // --- payments ------------------------------------------------------------
 function requireCashfree(_req, res, next) {

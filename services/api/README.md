@@ -49,6 +49,9 @@ flutter run \
 | `GET /kyc/status` | current KYC state + derived tier |
 | `GET /limits` | caps for the user + remaining today/month |
 | `POST /limits/check` | pre-check an amount before checkout |
+| `GET /cards` · `POST /cards` · `DELETE /cards/:id` | saved card token refs (no PAN) |
+| `GET /beneficiaries` · `POST /beneficiaries` | list / add + verify payee |
+| `POST /beneficiaries/:id/verify` · `DELETE /beneficiaries/:id` | re-verify / remove |
 | `POST /payments/orders` | enforces limits, then creates a Cashfree order |
 | `POST /payments/confirm` | reads real status from Cashfree |
 | `POST /webhooks/cashfree` | Cashfree's authoritative callback (set as notify URL) |
@@ -62,6 +65,19 @@ flutter run \
   (`npm test`): KYC tier → per-transaction / daily / monthly caps, with a lower
   cap for unverified beneficiaries. It's enforced server-side in `/payments/orders`.
 - Spend tracking is stubbed at 0 until the ledger lands (Phase 4).
+
+## Cards & beneficiaries (Phase 3)
+- **Cards** (`src/cards/`): the backend stores only the PSP **token reference**
+  + display metadata (last4, network, issuer, expiry). `validateCardRef`
+  **rejects any field containing a PAN** (12–19 digits) — the app must tokenise
+  with the PSP SDK first. The token is never echoed back to the client.
+- **Beneficiaries** (`src/beneficiaries/`): added with instant name
+  verification via a swappable verifier — a **stub** by default, or set
+  `PAYOUT_PROVIDER=cashfree` + Cashfree Payout creds for the penny-drop / UPI
+  name-lookup adapter (endpoints marked TODO per dashboard docs). The full
+  account number is never returned (only a masked handle) and is flagged for
+  field-level encryption before production.
+- IFSC/VPA/account validators and the PAN guard are pure and unit-tested.
 
 ## Test
 ```bash
