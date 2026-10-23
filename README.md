@@ -1,121 +1,52 @@
-# Xorpay — Flutter payments-app starter
+# XORPAY
 
-A clean, original scaffold for a business-payments app. It gives you the shape
-of a production app (auth, biometric lock, QR scan-to-pay, a PSP-agnostic
-payment flow, secure networking) without any real payment logic wired in — you
-plug in **your own** backend and licensed payment provider.
+> Pay anything. Earn on everything.
 
-> This is greenfield code written from scratch. It is a reference architecture,
-> not a copy of any existing app.
+A business payments platform for India — pay vendors, rent, GST, taxes, fees and
+invoices by card/UPI/net banking, with the money settled to the beneficiary's
+bank account or UPI ID. Original product and branding.
 
-## Before you build: you can't move money by yourself
-
-A payments app in India sits on top of RBI-regulated rails. Pick a path:
-
-1. **Integrate a licensed PSP/aggregator** — Razorpay, Cashfree, PhonePe PG,
-   Juspay, Setu. Recommended for v1. They hold the license, do settlement, and
-   are PCI-DSS compliant. **This scaffold assumes this path.**
-2. **Become a UPI TPAP** — needs an NPCI-approved sponsor bank + certification.
-3. **PPI/wallet license** — direct RBI licensing.
-
-For KYC you'll use a licensed provider (HyperVerge, IDfy, Signzy) or
-DigiLocker + Aadhaar eKYC through a licensed KUA.
-
-## The golden security rule
-
-**Nothing secret ships in the app.** Every user can unzip the APK and read it.
-So:
-
-- PSP **secret** keys, signing, and order creation live on **your backend**.
-- The app only holds a short-lived session token and a PSP **publishable** key.
-- Payments are **verified server-side** before being treated as paid.
-
-See `lib/payments/payment_service.dart` — the 5-step flow is documented there.
-
-## Project layout
+This is a **monorepo**.
 
 ```
-lib/
-  main.dart                     app entry (+ optional Sentry)
-  app.dart                      root widget, auth gate + biometric lock
-  core/
-    config.dart                 build-time config (--dart-define), cert pins
-    api_client.dart             Dio client, auth interceptor, TLS pinning
-    secure_storage.dart         keystore-backed token storage
-  auth/
-    session.dart                OTP request/verify, session state
-    biometric_lock.dart         fingerprint/face gate for sensitive screens
-  login/login_screen.dart       phone + OTP UI
-  payments/
-    payment_service.dart        PSP-agnostic order/pay/verify (stubbed)
-    qr_scan_screen.dart         ML Kit QR scan + UPI URI parser
-    payment_status_screen.dart  success/pending/failed (Lottie + fallback)
-    home_screen.dart            balance + scan-and-pay
-  common/app_theme.dart         Material 3 theme
+apps/
+  mobile/        Flutter app (Android first, iOS ready)
+  admin/         Next.js admin & ops panel         [planned]
+services/
+  api/           Backend API                        (Cashfree sandbox test
+                 server today; NestJS in Phase 4)
+packages/
+  xorpay_ui/     Design system (tokens, theme, components) — build on this
+docs/            Backend API spec, deploy guide
 ```
 
-## Run it
-
-```bash
-# 1. Install Flutter: https://docs.flutter.dev/get-started/install
-flutter --version
-
-# 2. Generate the native platform folders (android/ios) for this project.
-#    Run from inside this folder; it keeps the existing lib/ and pubspec.yaml.
-flutter create .
-
-# 3. Fetch dependencies
-flutter pub get
-
-# 4. Run, injecting config (no secrets in source!)
-flutter run \
-  --dart-define=API_BASE_URL=https://api.yourbackend.com \
-  --dart-define=CASHFREE_ENV=SANDBOX \
-  --dart-define=SENTRY_DSN=
-```
-
-## PSP: Cashfree (wired in)
-
-This scaffold uses the **Cashfree** Drop-in checkout
-(`flutter_cashfree_pg_sdk`), implemented in `lib/payments/payment_service.dart`.
-
-The trust boundary — **the app never holds your Cashfree secret key**:
-
-1. App → **your backend**: `POST /payments/orders` (amount, currency).
-2. Backend → Cashfree *Create Order* API using the **secret key**; returns
-   `order_id` + `payment_session_id`.
-3. App opens Cashfree Drop checkout with the `payment_session_id`.
-4. On the SDK verify callback, app → **your backend**: `POST /payments/confirm`.
-5. Backend → Cashfree *Get Order* API (secret key); it trusts **that** status,
-   not the client, before marking the order paid. Back this with Cashfree
-   **webhooks** for reconciliation.
-
-Your backend endpoints to implement:
-
-| Endpoint | Does |
+## Partners (v1 defaults — switchable from admin)
+| Capability | Provider |
 |---|---|
-| `POST /payments/orders` | Create a Cashfree order, return `order_id` + `payment_session_id` |
-| `POST /payments/confirm` | Fetch real order status from Cashfree, return `{ "status": "PAID" }` |
+| Pay-in (collection) | Cashfree |
+| Payouts (settlement) | Cashfree Payouts |
+| KYC (PAN/Aadhaar/selfie/GSTIN) | HyperVerge |
+| Bill pay (BBPS) | Setu |
+| Platform fee | 2% + 18% GST on the fee |
 
-> SDK note: class/method names here target `flutter_cashfree_pg_sdk` ^2.2.x.
-> If `flutter pub get` resolves a different major version, re-check the builder
-> and callback names against the package README and adjust `payment_service.dart`.
+## Build order (master plan, phase by phase)
+1. **Foundation** — design system, auth/OTP, onboarding, backend skeleton, CI ← *in progress*
+2. KYC + business profile + limits
+3. Cards + beneficiaries
+4. Payments core (fee engine, PA, webhooks, payouts, ledger, receipts) — NestJS API
+5. More categories (GST, education, taxes, BBPS card bills, invoices)
+6. Rewards, referrals, notifications
+7. Admin panel + reconciliation + reports
+8. Support, disputes, statements, settings
+9. Hardening, tests, deploy
 
-## Platform permissions to add (after `flutter create .`)
+## Each part's README
+- Mobile app: [apps/mobile/README.md](apps/mobile/README.md)
+- Design system: [packages/xorpay_ui/README.md](packages/xorpay_ui/README.md)
+- API (test server): [services/api/README.md](services/api/README.md)
+- Deploy: [docs/DEPLOY.md](docs/DEPLOY.md) · API spec: [docs/BACKEND.md](docs/BACKEND.md)
 
-- **Android** (`android/app/src/main/AndroidManifest.xml`): `CAMERA` (QR),
-  `USE_BIOMETRIC`, `INTERNET`. Add others (SMS/contacts) only if you truly need
-  them and can justify them in Play review — request at runtime, minimally.
-- **iOS** (`ios/Runner/Info.plist`): `NSCameraUsageDescription`,
-  `NSFaceIDUsageDescription`.
-
-## Hardening checklist (fintech)
-
-- [x] TLS pinning scaffold (`core/api_client.dart` — add your pins in config)
-- [x] Secure token storage
-- [x] Biometric app-lock
-- [ ] Initialize `freerasp` for root/hook/debug/tamper detection (see `main.dart`)
-- [ ] Certificate **public-key (SPKI)** pinning with a backup pin for rotation
-- [ ] Runtime permission requests (not all-upfront)
-- [ ] Obfuscation: `flutter build apk --obfuscate --split-debug-info=...`
-```
+## Compliance note
+Money is collected and settled only through an RBI-authorised payment
+aggregator; XORPAY does not hold funds. KYC/AML, DPDP data-localisation, and
+card-tokenisation rules apply — see the security section of the master spec.

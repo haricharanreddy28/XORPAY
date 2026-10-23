@@ -11,6 +11,10 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
 
+  # XORPAY design system (local package)
+  xorpay_ui:
+    path: ../../packages/xorpay_ui
+
   # Networking
   dio: ^5.7.0
   crypto: ^3.0.5 # sha256 for TLS cert pinning
