@@ -12,6 +12,9 @@ const cards = new Map();
 /** phone -> [ beneficiary ] */
 const beneficiaries = new Map();
 
+/** txn_id -> transaction record */
+const transactions = new Map();
+
 const newId = (prefix) =>
   `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
@@ -76,10 +79,27 @@ export function updateKyc(phone, patch) {
 }
 
 /**
- * Spend so far for a user. Stubbed at 0 until the ledger lands (Phase 4);
- * the limits engine already accepts these, so wiring real numbers later is
- * a one-line change here.
+ * Spend so far for a user. Still 0 here; a proper rollup from PAID/SUCCESS
+ * transactions lands with the Postgres migration (Phase 4+).
  */
 export function getSpend(_phone) {
   return { spentTodayMinor: 0, spentMonthMinor: 0 };
 }
+
+// --- transactions --------------------------------------------------------
+export function createTransaction(txn) {
+  transactions.set(txn.id, txn);
+  return txn;
+}
+export function getTransaction(id) {
+  return transactions.get(id) ?? null;
+}
+export function listTransactions(phone) {
+  return [...transactions.values()]
+    .filter((t) => t.phone === phone)
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+// --- shared double-entry ledger -----------------------------------------
+import { Ledger } from "./ledger/ledger.js";
+export const ledger = new Ledger();

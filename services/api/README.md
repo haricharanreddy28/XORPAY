@@ -52,8 +52,9 @@ flutter run \
 | `GET /cards` · `POST /cards` · `DELETE /cards/:id` | saved card token refs (no PAN) |
 | `GET /beneficiaries` · `POST /beneficiaries` | list / add + verify payee |
 | `POST /beneficiaries/:id/verify` · `DELETE /beneficiaries/:id` | re-verify / remove |
-| `POST /payments/orders` | enforces limits, then creates a Cashfree order |
-| `POST /payments/confirm` | reads real status from Cashfree |
+| `POST /payments/orders` | limits check → fee → Cashfree order (charges youPay) |
+| `POST /payments/confirm` | reads real status; settles ledger + state on PAID |
+| `GET /transactions` · `GET /transactions/:id` | history + detail (with ledger) |
 | `POST /webhooks/cashfree` | Cashfree's authoritative callback (set as notify URL) |
 | `GET /health` | liveness (`payments` flag shows if Cashfree is configured) |
 
@@ -78,6 +79,20 @@ flutter run \
   account number is never returned (only a masked handle) and is flagged for
   field-level encryption before production.
 - IFSC/VPA/account validators and the PAN guard are pure and unit-tested.
+
+## Payments core (Phase 4)
+- **Fee engine** (`src/payments/fee.js`): 2% + 18% GST on the fee, integer paise,
+  mirrors the app's XFee. `/payments/orders` charges `youPay`.
+- **Double-entry ledger** (`src/ledger/ledger.js`): every payment posts a
+  balanced entry (collections = escrow + fee + GST); payout releases escrow.
+  Balances net correctly; unbalanced posts throw.
+- **State machine** (`src/payments/stateMachine.js`): CREATED → PAYMENT_PENDING
+  → PAID → PAYOUT_QUEUED → PAYOUT_PROCESSING → SUCCESS | FAILED →
+  REFUND_INITIATED → REFUNDED. Illegal transitions throw.
+- Settlement is **idempotent**: `markPaid` posts the ledger + advances state
+  once, driven by the confirm endpoint and (authoritatively) the webhook.
+- Next slice: the payout queue worker (PAYOUT_QUEUED → SUCCESS) and receipts.
+  The queue is in-process for dev; BullMQ/Redis comes with the NestJS migration.
 
 ## Test
 ```bash

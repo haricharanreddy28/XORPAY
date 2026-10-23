@@ -17,6 +17,14 @@ import { kycRoutes } from "./src/kyc/kycRoutes.js";
 import { limitsRoutes } from "./src/limits/limitsRoutes.js";
 import { cardRoutes } from "./src/cards/cardRoutes.js";
 import { beneficiaryRoutes } from "./src/beneficiaries/beneficiaryRoutes.js";
+import { transactionRoutes } from "./src/payments/transactionRoutes.js";
+import { computeFee } from "./src/payments/fee.js";
+import { TxnState, canTransition } from "./src/payments/stateMachine.js";
+import {
+  createTransaction,
+  getTransaction,
+  ledger,
+} from "./src/store.js";
 import { tierForKyc, evaluate } from "./src/limits/limitsEngine.js";
 
 const {
@@ -78,6 +86,9 @@ app.use("/limits", limitsRoutes());
 app.use("/cards", cardRoutes());
 app.use("/beneficiaries", beneficiaryRoutes());
 
+// --- transactions --------------------------------------------------------
+app.use("/transactions", transactionRoutes());
+
 // --- payments ------------------------------------------------------------
 function requireCashfree(_req, res, next) {
   if (!cashfreeConfigured) {
@@ -107,8 +118,11 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
     return res.status(403).json({ error: "limit_exceeded", reason: decision.reason });
   }
 
+  // `amount` is what the beneficiary receives (paise). Fee is added on top,
+  // and the user is charged youPay — matching the quote the app showed.
+  const fee = computeFee(amount);
   const orderId = "ord_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
-  const orderAmount = amount / 100; // minor (paise) -> major (rupees)
+  const orderAmount = fee.youPayMinor / 100; // charge the total, in rupees
 
   try {
     const r = await fetch(`${CF_BASE}/orders`, {
@@ -131,12 +145,37 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
       return res.status(502).json({ error: "psp_unavailable", detail: data });
     }
     orders.set(orderId, { amountMinor: amount, phone: req.phone, status: "CREATED" });
-    res.json({ order_id: orderId, payment_session_id: data.payment_session_id });
+    createTransaction({
+      id: orderId,
+      phone: req.phone,
+      state: TxnState.PAYMENT_PENDING,
+      fee, // full breakdown, in paise
+      createdAt: Date.now(),
+    });
+    res.json({
+      order_id: orderId,
+      payment_session_id: data.payment_session_id,
+      fee, // so the client can show the exact server-side breakdown
+    });
   } catch (e) {
     console.error("[cashfree create] threw", e);
     res.status(502).json({ error: "psp_unavailable" });
   }
 });
+
+// Settle a paid order once: advance PAYMENT_PENDING -> PAID, post the payment
+// to the ledger, then queue the payout. Idempotent — safe to call from both
+// the confirm endpoint and the webhook.
+function markPaid(orderId) {
+  const txn = getTransaction(orderId);
+  if (!txn) return;
+  if (!canTransition(txn.state, TxnState.PAID)) return; // already settled
+  txn.state = TxnState.PAID;
+  ledger.postPayment(orderId, txn.fee);
+  // Queue the payout (the queue worker lands in the next slice).
+  txn.state = TxnState.PAYOUT_QUEUED;
+  console.log(`[txn] ${orderId} -> PAID -> PAYOUT_QUEUED`);
+}
 
 // 2) Confirm: ask Cashfree for the real status (never trust the client).
 app.post("/payments/confirm", requireAuth, requireCashfree, async (req, res) => {
@@ -153,6 +192,7 @@ app.post("/payments/confirm", requireAuth, requireCashfree, async (req, res) => 
     const data = await r.json();
     const status = (data.order_status || "").toUpperCase();
     record.status = status;
+    if (status === "PAID") markPaid(order_id);
     res.json({ order_id, status, amount: record.amountMinor });
   } catch (e) {
     console.error("[cashfree get] threw", e);
@@ -179,8 +219,11 @@ app.post("/webhooks/cashfree", (req, res) => {
   if (orderId && orders.has(orderId)) {
     orders.get(orderId).status = orderStatus; // idempotent: last write wins
     console.log(`[webhook] ${orderId} -> ${orderStatus}`);
+    // Authoritative settlement: post the ledger entry + queue payout, once.
+    const paid = orderStatus === "PAID" ||
+      String(req.body?.type || "").includes("PAYMENT_SUCCESS");
+    if (paid) markPaid(orderId);
   }
-  // Downstream effects (ledger, receipt, push) belong HERE, idempotently.
   res.json({ ok: true });
 });
 
