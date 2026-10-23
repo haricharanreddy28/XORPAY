@@ -25,6 +25,7 @@ import {
   getTransaction,
   ledger,
 } from "./src/store.js";
+import { enqueuePayout } from "./src/payouts/payoutQueue.js";
 import { tierForKyc, evaluate } from "./src/limits/limitsEngine.js";
 
 const {
@@ -99,7 +100,8 @@ function requireCashfree(_req, res, next) {
 
 // 1) Create a Cashfree order — enforces KYC/limits first.
 app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
-  const { amount, currency = "INR", beneficiaryVerified = true } = req.body || {};
+  const { amount, currency = "INR", beneficiaryVerified = true, beneficiaryId = null } =
+    req.body || {};
   if (!Number.isInteger(amount) || amount <= 0) {
     return res.status(400).json({ error: "invalid_amount" });
   }
@@ -148,6 +150,7 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
     createTransaction({
       id: orderId,
       phone: req.phone,
+      beneficiaryId,
       state: TxnState.PAYMENT_PENDING,
       fee, // full breakdown, in paise
       createdAt: Date.now(),
@@ -172,9 +175,10 @@ function markPaid(orderId) {
   if (!canTransition(txn.state, TxnState.PAID)) return; // already settled
   txn.state = TxnState.PAID;
   ledger.postPayment(orderId, txn.fee);
-  // Queue the payout (the queue worker lands in the next slice).
+  // Queue the payout; the worker advances PAYOUT_QUEUED -> SUCCESS (or refunds).
   txn.state = TxnState.PAYOUT_QUEUED;
   console.log(`[txn] ${orderId} -> PAID -> PAYOUT_QUEUED`);
+  enqueuePayout(orderId);
 }
 
 // 2) Confirm: ask Cashfree for the real status (never trust the client).

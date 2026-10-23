@@ -91,8 +91,13 @@ flutter run \
   REFUND_INITIATED → REFUNDED. Illegal transitions throw.
 - Settlement is **idempotent**: `markPaid` posts the ledger + advances state
   once, driven by the confirm endpoint and (authoritatively) the webhook.
-- Next slice: the payout queue worker (PAYOUT_QUEUED → SUCCESS) and receipts.
-  The queue is in-process for dev; BullMQ/Redis comes with the NestJS migration.
+- **Payout queue** (`src/payouts/`): on PAID the transaction is enqueued; the
+  PayoutProcessor runs PAYOUT_QUEUED → PAYOUT_PROCESSING → SUCCESS via a
+  swappable payout provider (stub / Cashfree Payouts skeleton), retries
+  transient failures, and on a permanent failure **auto-refunds to source**
+  (REFUND_INITIATED → REFUNDED, reversing the ledger). In-process for dev;
+  BullMQ/Redis with a dead-letter queue comes with the NestJS migration.
+- Next slice: the app's vendor/rent flows + receipts.
 
 ## Test
 ```bash

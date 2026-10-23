@@ -43,6 +43,21 @@ export class Ledger {
     );
   }
 
+  /** Refund to source: reverse the original payment (used when payout fails
+   *  permanently before the money left escrow). */
+  postRefund(txnId, { payeeMinor, feeMinor, gstMinor, youPayMinor }) {
+    this.post(
+      txnId,
+      [
+        { account: Account.ESCROW, debitMinor: payeeMinor },
+        { account: Account.FEE_REVENUE, debitMinor: feeMinor },
+        { account: Account.GST_PAYABLE, debitMinor: gstMinor },
+        { account: Account.COLLECTIONS, creditMinor: youPayMinor },
+      ],
+      "refund",
+    );
+  }
+
   /** Payout: release escrow to the beneficiary. */
   postPayout(txnId, payeeMinor) {
     this.post(

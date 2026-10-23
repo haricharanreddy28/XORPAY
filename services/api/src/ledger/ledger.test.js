@@ -24,6 +24,17 @@ test("escrow nets to zero after payout", () => {
   assert.equal(l.balance(Account.PAYOUTS), -f.payeeMinor);
 });
 
+test("refund reverses the payment — all accounts net to zero", () => {
+  const l = new Ledger();
+  const f = computeFee(1_000_000);
+  l.postPayment("t2", f);
+  l.postRefund("t2", f);
+  assert.equal(l.balance(Account.COLLECTIONS), 0);
+  assert.equal(l.balance(Account.ESCROW), 0);
+  assert.equal(l.balance(Account.FEE_REVENUE), 0);
+  assert.equal(l.balance(Account.GST_PAYABLE), 0);
+});
+
 test("unbalanced post throws", () => {
   const l = new Ledger();
   assert.throws(() =>
