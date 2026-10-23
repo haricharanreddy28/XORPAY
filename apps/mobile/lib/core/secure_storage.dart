@@ -12,6 +12,7 @@ class SecureStore {
 
   static const _kAccessToken = 'access_token';
   static const _kRefreshToken = 'refresh_token';
+  static const _kIntroSeen = 'intro_seen';
 
   Future<void> saveTokens({
     required String accessToken,
@@ -26,5 +27,14 @@ class SecureStore {
   Future<String?> get accessToken => _storage.read(key: _kAccessToken);
   Future<String?> get refreshToken => _storage.read(key: _kRefreshToken);
 
-  Future<void> clear() async => _storage.deleteAll();
+  /// Whether the intro carousel has been shown (survives logout).
+  Future<bool> get introSeen async =>
+      (await _storage.read(key: _kIntroSeen)) == '1';
+  Future<void> markIntroSeen() => _storage.write(key: _kIntroSeen, value: '1');
+
+  /// Clears auth only — keeps non-auth prefs like [introSeen].
+  Future<void> clear() async {
+    await _storage.delete(key: _kAccessToken);
+    await _storage.delete(key: _kRefreshToken);
+  }
 }
