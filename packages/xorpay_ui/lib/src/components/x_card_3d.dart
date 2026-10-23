@@ -11,6 +11,33 @@ import '../theme/x_type.dart';
 /// are intentionally not drawn.
 enum CardNetwork { visa, mastercard, rupay, amex, diners, other }
 
+/// Detect the network from the leading digits (BIN) of a card number.
+/// Works on a partial number as the user types. Ranges are approximate and
+/// cover the common Indian-market cases; refine against your PSP's BIN data.
+CardNetwork detectCardNetwork(String input) {
+  final d = input.replaceAll(RegExp(r'\D'), '');
+  if (d.isEmpty) return CardNetwork.other;
+
+  int pre(int n) => d.length >= n ? int.parse(d.substring(0, n)) : -1;
+
+  if (d.startsWith('4')) return CardNetwork.visa;
+  if (d.startsWith('34') || d.startsWith('37')) return CardNetwork.amex;
+
+  final p2 = pre(2);
+  if (p2 == 36 || p2 == 38 || p2 == 39) return CardNetwork.diners;
+  if (p2 >= 51 && p2 <= 55) return CardNetwork.mastercard;
+  if ({60, 65, 81, 82, 88}.contains(p2)) return CardNetwork.rupay;
+
+  final p3 = pre(3);
+  if (p3 >= 300 && p3 <= 305) return CardNetwork.diners;
+  if (p3 == 508) return CardNetwork.rupay;
+
+  final p4 = pre(4);
+  if (p4 >= 2221 && p4 <= 2720) return CardNetwork.mastercard;
+
+  return CardNetwork.other;
+}
+
 extension on CardNetwork {
   String get label => switch (this) {
         CardNetwork.visa => 'VISA',

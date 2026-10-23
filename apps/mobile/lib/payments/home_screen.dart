@@ -4,6 +4,7 @@ import 'package:xorpay_ui/xorpay_ui.dart';
 
 import '../auth/session.dart';
 import '../business/business_profile_screen.dart';
+import '../cards/cards_screen.dart';
 import '../limits/limits_service.dart';
 import 'payment_service.dart';
 import 'payment_status_screen.dart';
@@ -34,6 +35,12 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (_) => const BusinessProfileScreen()),
     );
     if (changed == true) _refreshLimits(); // GST tier may have raised limits
+  }
+
+  void _openCards() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const CardsScreen()),
+    );
   }
 
   Future<void> _scanAndPay() async {
@@ -97,6 +104,12 @@ class _HomeScreenState extends State<HomeScreen> {
               label: 'Scan & Pay',
               icon: Icons.qr_code_scanner,
               onPressed: _scanAndPay,
+            ),
+            const SizedBox(height: XSpacing.md),
+            XButton.secondary(
+              label: 'Cards',
+              icon: Icons.credit_card,
+              onPressed: _openCards,
             ),
             const SizedBox(height: XSpacing.md),
             XButton.secondary(
