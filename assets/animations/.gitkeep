@@ -1,0 +1,4 @@
+# Drop your Lottie JSON animations here:
+#   success.json, pending.json, failed.json
+# Referenced by lib/payments/payment_status_screen.dart.
+# The UI falls back to plain icons if these are missing.

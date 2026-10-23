@@ -1,0 +1,24 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Secrets — never commit real keys. Use --dart-define or CI secrets.
+*.env
+.env
+key.properties
+*.keystore
+*.jks
+
+# Third-party APK under analysis — do not publish
+*.apks
+*.apk
+*.aab

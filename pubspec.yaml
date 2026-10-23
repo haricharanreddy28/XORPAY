@@ -1,0 +1,50 @@
+name: xorpay
+description: A starter business-payments app (Flutter). Plug in your own PSP and backend.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # Networking
+  dio: ^5.7.0
+  crypto: ^3.0.5 # sha256 for TLS cert pinning
+
+  # Secure on-device storage (tokens, not secrets)
+  flutter_secure_storage: ^9.2.2
+
+  # Biometric app-lock
+  local_auth: ^2.3.0
+
+  # QR / barcode scanning (wraps Google ML Kit)
+  mobile_scanner: ^5.2.3
+
+  # State management (lightweight)
+  provider: ^6.1.2
+
+  # PSP: Cashfree Payment Gateway (Drop-in checkout)
+  flutter_cashfree_pg_sdk: ^2.2.1
+
+  # Animated payment-state screens
+  lottie: ^3.1.2
+
+  # Crash reporting (optional; mirrors Pice's sentry_flutter)
+  sentry_flutter: ^8.9.0
+
+  # Root/jailbreak + tamper detection (recommended for fintech)
+  freerasp: ^6.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/animations/
