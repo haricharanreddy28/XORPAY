@@ -77,6 +77,8 @@ class _StepLayout extends StatelessWidget {
     required this.cta,
     required this.onCta,
     this.ctaEnabled = true,
+    this.busy = false,
+    this.error,
     super.key,
   });
 
@@ -86,6 +88,8 @@ class _StepLayout extends StatelessWidget {
   final String cta;
   final VoidCallback onCta;
   final bool ctaEnabled;
+  final bool busy;
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +103,15 @@ class _StepLayout extends StatelessWidget {
         Text(why, style: XType.caption.copyWith(color: xc.textSecondary)),
         const SizedBox(height: XSpacing.xxl),
         Expanded(child: child),
-        XButton(label: cta, onPressed: ctaEnabled ? onCta : null),
+        if (error != null) ...[
+          Text(error!, style: XType.caption.copyWith(color: xc.error)),
+          const SizedBox(height: XSpacing.md),
+        ],
+        XButton(
+          label: cta,
+          loading: busy,
+          onPressed: (ctaEnabled && !busy) ? onCta : null,
+        ),
       ],
     );
   }
@@ -127,10 +139,13 @@ class _PanStepState extends State<_PanStep> {
   @override
   Widget build(BuildContext context) {
     final xc = context.xc;
+    final kyc = context.watch<KycController>();
     return _StepLayout(
       title: 'Your PAN',
       why: 'Required by RBI for business payments and to set your limits.',
       ctaEnabled: _valid,
+      busy: kyc.busy,
+      error: kyc.error,
       cta: 'Continue',
       onCta: () => context.read<KycController>().submitPan(_controller.text),
       child: Align(
@@ -164,9 +179,12 @@ class _AadhaarStep extends StatelessWidget {
   const _AadhaarStep();
   @override
   Widget build(BuildContext context) {
+    final kyc = context.watch<KycController>();
     return _StepLayout(
       title: 'Aadhaar KYC',
       why: 'Verified instantly via DigiLocker — we never store your Aadhaar number.',
+      busy: kyc.busy,
+      error: kyc.error,
       cta: 'Verify with DigiLocker',
       onCta: () => context.read<KycController>().submitAadhaar(),
       child: const _CenterIcon(icon: Icons.account_balance_rounded),
@@ -180,9 +198,12 @@ class _SelfieStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final xc = context.xc;
+    final kyc = context.watch<KycController>();
     return _StepLayout(
       title: 'Quick selfie',
       why: 'A liveness check confirms it’s really you and prevents fraud.',
+      busy: kyc.busy,
+      error: kyc.error,
       cta: 'Take selfie',
       onCta: () => context.read<KycController>().submitSelfie(),
       child: Center(

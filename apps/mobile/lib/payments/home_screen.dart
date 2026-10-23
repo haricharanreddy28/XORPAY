@@ -1,19 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:xorpay_ui/xorpay_ui.dart';
 
 import '../auth/session.dart';
+import '../limits/limits_service.dart';
 import 'payment_service.dart';
 import 'payment_status_screen.dart';
 import 'qr_scan_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
-  Future<void> _scanAndPay(BuildContext context) async {
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  Future<Limits>? _limits;
+
+  @override
+  void initState() {
+    super.initState();
+    _limits = LimitsService.instance.fetch();
+  }
+
+  void _refreshLimits() {
+    setState(() => _limits = LimitsService.instance.fetch());
+  }
+
+  Future<void> _scanAndPay() async {
     final raw = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const QrScanScreen()),
     );
-    if (raw == null || !context.mounted) return;
+    if (raw == null || !mounted) return;
 
     final upi = UpiPayload.tryParse(raw);
     final messenger = ScaffoldMessenger.of(context);
@@ -22,24 +41,36 @@ class HomeScreen extends StatelessWidget {
       return;
     }
 
-    // Demo amount: 1 rupee = 100 paise. Real flow collects the amount.
+    // Demo amount: ₹1 = 100 paise. Real flow collects the amount via AmountPad.
+    const amountMinor = 100;
+
+    // Early limits check so we fail fast with a clear message.
+    final check = await LimitsService.instance.check(amountMinor);
+    if (!check.allowed) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(check.message)));
+      return;
+    }
+
     final order = await PaymentService.instance.createOrder(
-      amountMinor: 100,
+      amountMinor: amountMinor,
       metadata: {'payee': upi!.payeeVpa},
     );
     final result = await PaymentService.instance.payWithOrder(order);
 
-    if (!context.mounted) return;
-    Navigator.of(context).push(
+    if (!mounted) return;
+    await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => PaymentStatusScreen(result: result)),
     );
+    _refreshLimits();
   }
 
   @override
   Widget build(BuildContext context) {
+    final xc = context.xc;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Xorpay'),
+        title: const Text('XORPAY'),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -47,42 +78,111 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: RefreshIndicator(
+        onRefresh: () async => _refreshLimits(),
+        child: ListView(
+          padding: const EdgeInsets.all(XSpacing.xl),
           children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Balance', style: Theme.of(context).textTheme.labelMedium),
-                    const SizedBox(height: 4),
-                    Text('₹ —', style: Theme.of(context).textTheme.headlineMedium),
-                    const SizedBox(height: 4),
-                    Text('Wire up GET /account/balance',
-                        style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-              ),
+            _LimitsCard(future: _limits),
+            const SizedBox(height: XSpacing.xl),
+            XButton(
+              label: 'Scan & Pay',
+              icon: Icons.qr_code_scanner,
+              onPressed: _scanAndPay,
             ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: () => _scanAndPay(context),
-              icon: const Icon(Icons.qr_code_scanner),
-              label: const Text('Scan & Pay'),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
+            const SizedBox(height: XSpacing.md),
+            XButton.secondary(
+              label: 'Transactions',
+              icon: Icons.history,
               onPressed: () {},
-              icon: const Icon(Icons.history),
-              label: const Text('Transactions'),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Hero "Available to pay" card driven by GET /limits.
+class _LimitsCard extends StatelessWidget {
+  const _LimitsCard({required this.future});
+  final Future<Limits>? future;
+
+  @override
+  Widget build(BuildContext context) {
+    final xc = context.xc;
+    return Container(
+      padding: const EdgeInsets.all(XSpacing.xl),
+      decoration: BoxDecoration(
+        gradient: xc.gradient,
+        borderRadius: BorderRadius.circular(XRadius.card),
+        boxShadow: [BoxShadow(color: xc.glow, blurRadius: 28, offset: const Offset(0, 12))],
+      ),
+      child: FutureBuilder<Limits>(
+        future: future,
+        builder: (context, snap) {
+          final onGrad = Colors.white;
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const SizedBox(
+              height: 72,
+              child: Center(child: CircularProgressIndicator(color: Colors.white)),
+            );
+          }
+          if (snap.hasError || !snap.hasData) {
+            return SizedBox(
+              height: 72,
+              child: Center(
+                child: Text('Couldn’t load limits. Pull to refresh.',
+                    style: XType.caption.copyWith(color: onGrad)),
+              ),
+            );
+          }
+          final l = snap.data!;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Available to pay today',
+                      style: XType.caption.copyWith(color: onGrad.withValues(alpha: 0.85))),
+                  _TierChip(label: l.tierLabel),
+                ],
+              ),
+              const SizedBox(height: XSpacing.sm),
+              Text(
+                XMoney.fromMinor(l.remainingDailyMinor),
+                style: XType.amount(36).copyWith(color: onGrad),
+              ),
+              const SizedBox(height: XSpacing.xs),
+              Text(
+                l.canPay
+                    ? 'Per payment up to ${XMoney.fromMinor(l.perTxnMinor)}'
+                    : 'Complete KYC to start paying',
+                style: XType.caption.copyWith(color: onGrad.withValues(alpha: 0.85)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TierChip extends StatelessWidget {
+  const _TierChip({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(XRadius.pill),
+      ),
+      child: Text(label,
+          style: XType.overline.copyWith(color: Colors.white)),
     );
   }
 }
