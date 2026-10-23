@@ -100,8 +100,13 @@ function requireCashfree(_req, res, next) {
 
 // 1) Create a Cashfree order — enforces KYC/limits first.
 app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
-  const { amount, currency = "INR", beneficiaryVerified = true, beneficiaryId = null } =
-    req.body || {};
+  const {
+    amount,
+    currency = "INR",
+    beneficiaryVerified = true,
+    beneficiaryId = null,
+    category = null,
+  } = req.body || {};
   if (!Number.isInteger(amount) || amount <= 0) {
     return res.status(400).json({ error: "invalid_amount" });
   }
@@ -151,6 +156,7 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
       id: orderId,
       phone: req.phone,
       beneficiaryId,
+      category,
       state: TxnState.PAYMENT_PENDING,
       fee, // full breakdown, in paise
       createdAt: Date.now(),

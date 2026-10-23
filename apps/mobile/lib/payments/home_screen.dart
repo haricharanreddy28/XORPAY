@@ -8,6 +8,7 @@ import '../business/business_profile_screen.dart';
 import '../cards/cards_screen.dart';
 import '../limits/limits_service.dart';
 import 'rent_pay_screen.dart';
+import 'transactions_screen.dart';
 import 'vendor_pay_screen.dart';
 import 'payment_service.dart';
 import 'payment_status_screen.dart';
@@ -153,7 +154,9 @@ class _HomeScreenState extends State<HomeScreen> {
             XButton.secondary(
               label: 'Transactions',
               icon: Icons.history,
-              onPressed: () {},
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const TransactionsScreen()),
+              ),
             ),
           ],
         ),
