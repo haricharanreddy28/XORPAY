@@ -1,0 +1,22 @@
+name: xorpay_ui
+description: XORPAY design system — tokens, theme, typography and components.
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_fonts: ^6.2.1 # Sora (headings/amounts) + Inter (body)
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  widgetbook: ^3.10.1 # component catalogue
+
+flutter:
+  uses-material-design: true
