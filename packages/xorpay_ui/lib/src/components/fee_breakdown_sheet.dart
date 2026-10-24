@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/x_colors.dart';
 import '../theme/x_spacing.dart';
 import '../theme/x_theme.dart';
 import '../theme/x_type.dart';

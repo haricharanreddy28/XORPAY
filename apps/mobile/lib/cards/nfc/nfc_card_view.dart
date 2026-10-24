@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:nfc_manager/nfc_manager.dart';
-import 'package:nfc_manager_android/nfc_manager_android.dart';
+import 'package:nfc_manager/nfc_manager_android.dart';
 import 'package:xorpay_ui/xorpay_ui.dart';
 
 import 'track2_parser.dart';

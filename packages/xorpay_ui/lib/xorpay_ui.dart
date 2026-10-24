@@ -23,3 +23,4 @@ export 'src/components/x_card_3d.dart';
 export 'src/components/x_stepper.dart';
 export 'src/components/fee_breakdown_sheet.dart';
 export 'src/components/status_timeline.dart';
+export 'src/components/category_grid.dart';
