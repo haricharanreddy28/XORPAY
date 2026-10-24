@@ -1,18 +1,21 @@
 # Xorpay test backend (Cashfree sandbox)
 
 Minimal Node/Express server so you can run a **real Cashfree checkout with test
-money** end-to-end with the Flutter app. In-memory, stubbed auth — **not
+money** and phone verification through Twilio Verify. In-memory auth/payment state — **not
 production**.
 
 ## 1. Get sandbox keys
-merchant.cashfree.com → Developers → API Keys → **Sandbox** → copy App ID + Secret Key.
+1. merchant.cashfree.com → Developers → API Keys → **Sandbox** → copy App ID + Secret Key.
+2. Twilio Console → Verify → Services → create a service; copy the Account SID, Auth Token and Verify Service SID. Trial accounts must verify each destination phone number first.
 
 ## 2. Run it
 ```bash
-cd backend
+cd services/api
 npm install
-CASHFREE_APP_ID=xxx CASHFREE_SECRET_KEY=yyy node server.js
-# or: copy .env.example to your shell env / use a dotenv runner
+# Set these in your shell or a local .env loader; never commit real credentials.
+CASHFREE_APP_ID=xxx CASHFREE_SECRET_KEY=yyy \\
+TWILIO_ACCOUNT_SID=AC... TWILIO_AUTH_TOKEN=... \\
+TWILIO_VERIFY_SERVICE_SID=VA... node server.js
 ```
 Sanity check: `curl http://localhost:8080/health` → `{"ok":true,"env":"SANDBOX"}`
 
@@ -31,7 +34,9 @@ flutter run \
 ```
 
 ## 5. Test the flow
-- **Login:** enter any phone, then OTP **`123456`** (stubbed).
+- **Login:** enter your Indian mobile number. Twilio sends an SMS code; enter that code in the app. Local 10-digit numbers are converted to +91 E.164 format.
+- Twilio Verify has a 30-second resend cooldown and a small per-phone/IP request cap.
+- For offline UI testing only, set `OTP_PROVIDER=stub` and optionally `OTP_STUB_CODE=123456`; the fixed code is disabled when `NODE_ENV=production`.
 - **Scan & Pay:** scan any `upi://pay?pa=test@upi&...` QR (generate one online for testing).
 - **Checkout:** Cashfree Drop opens — pay with a **sandbox test instrument**
   (test UPI ID / test card from Cashfree's "Test Data" docs). No real money.
@@ -40,8 +45,8 @@ flutter run \
 ## Endpoints
 | Route | Purpose |
 |---|---|
-| `POST /auth/otp/request` | stub: logs the OTP (always `123456`) |
-| `POST /auth/otp/verify` | stub: returns a test token |
+| `POST /auth/otp/request` | send an SMS through Twilio Verify |
+| `POST /auth/otp/verify` | verify the code through Twilio Verify; returns a test token |
 | `POST /kyc/pan` | verify PAN (provider) |
 | `POST /kyc/gstin` | verify GSTIN → higher tier |
 | `POST /kyc/aadhaar/init` · `/aadhaar/complete` | DigiLocker/OKYC start + finish |
@@ -132,7 +137,7 @@ npm test   # node --test — runs the limits engine suite
 ```
 
 ## Before production (do not skip)
-- Replace stubbed OTP + base64 tokens with real auth (JWT/session, device binding).
+- Replace the in-memory OTP rate limiter and base64 tokens with shared rate limiting and signed JWT/session auth with device binding.
 - Replace the in-memory `orders` Map with a database; add idempotency keys.
 - Register the webhook URL in the Cashfree dashboard and rely on it for "paid".
 - Move secret key to a secrets manager; never commit it.
