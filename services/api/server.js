@@ -89,7 +89,25 @@ const cfHeaders = {
   "Content-Type": "application/json",
 };
 
+const adminCorsOrigins = new Set(
+  String(process.env.ADMIN_CORS_ORIGINS || (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000"))
+    .split(",").map((origin) => origin.trim()).filter(Boolean),
+);
+function adminCors(req, res, next) {
+  const origin = req.headers.origin;
+  if (origin && !adminCorsOrigins.has(origin)) return res.status(403).json({ error: "origin_not_allowed" });
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Token");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+}
+
 const app = express();
+app.use(adminCors);
 app.use(
   express.json({
     verify: (req, _res, buf) => {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { getToken } from "@/lib/api";
+import { getToken, setToken } from "@/lib/api";
 
 const NAV: [string, string][] = [
   ["Dashboard", "/dashboard"],
@@ -12,6 +12,7 @@ const NAV: [string, string][] = [
   ["Refunds", "/refunds"],
   ["Reports", "/reports"],
   ["Reconciliation", "/reconciliation"],
+  ["Audit trail", "/audit"],
 ];
 
 export default function Shell({ children }: { children: ReactNode }) {
@@ -49,7 +50,7 @@ export default function Shell({ children }: { children: ReactNode }) {
         </nav>
         <button
           onClick={() => {
-            window.localStorage.removeItem("admin_token");
+            setToken(null);
             router.replace("/login");
           }}
           className="mt-8 text-xs text-muted hover:text-white"
