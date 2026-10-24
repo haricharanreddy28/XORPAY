@@ -6,6 +6,25 @@
 //   verifyBank({ accountNumber, ifsc }) -> { verified, registeredName? }
 //   verifyUpi({ vpa })                  -> { verified, registeredName? }
 
+import {
+  verifyBank as cfVerifyBank,
+  verifyUpi as cfVerifyUpi,
+  cashfreeVerificationConfigured,
+} from "../verification/cashfreeVerification.js";
+
+/** Uses the Cashfree Verification suite (same client as KYC). */
+export class CashfreeVerificationBeneficiaryVerifier {
+  get name() {
+    return "cashfree";
+  }
+  verifyBank({ accountNumber, ifsc, name }) {
+    return cfVerifyBank({ accountNumber, ifsc, name });
+  }
+  verifyUpi({ vpa }) {
+    return cfVerifyUpi({ vpa });
+  }
+}
+
 /** Deterministic dev/sandbox verifier — no network, shaped like the real one. */
 export class StubBeneficiaryVerifier {
   name = "stub";
@@ -69,17 +88,9 @@ export class CashfreeBeneficiaryVerifier {
 }
 
 export function makeBeneficiaryVerifier(env = process.env) {
-  const useCashfree =
-    (env.PAYOUT_PROVIDER || "").toLowerCase() === "cashfree" &&
-    env.CASHFREE_PAYOUT_CLIENT_ID &&
-    env.CASHFREE_PAYOUT_CLIENT_SECRET;
-
-  if (useCashfree) {
-    return new CashfreeBeneficiaryVerifier({
-      clientId: env.CASHFREE_PAYOUT_CLIENT_ID,
-      clientSecret: env.CASHFREE_PAYOUT_CLIENT_SECRET,
-      baseUrl: env.CASHFREE_PAYOUT_BASE_URL || "https://sandbox.cashfree.com/payout",
-    });
+  // Prefer the Cashfree Verification suite when its creds are set.
+  if (cashfreeVerificationConfigured(env)) {
+    return new CashfreeVerificationBeneficiaryVerifier();
   }
   return new StubBeneficiaryVerifier();
 }

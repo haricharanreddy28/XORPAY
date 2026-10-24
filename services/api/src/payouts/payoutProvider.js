@@ -18,65 +18,111 @@ export class StubPayoutProvider {
 }
 
 /**
- * Cashfree Payouts SKELETON. Cashfree Payouts creates a beneficiary then a
- * transfer (IMPS/NEFT/UPI) and reports status via API + webhook. Confirm the
- * exact endpoints + auth (it uses a separate client-id/secret and a bearer
- * token exchange) against your Payouts dashboard, then fill the marked spots.
- * Credentials stay server-side.
+ * Cashfree Payouts (V2 API, x-api-version 2024-01-01). Direct client-id/secret
+ * auth — no token exchange. Disburses to a bank account or UPI VPA and reports
+ * status via API + webhook. Credentials come only from the server env.
+ *
+ * NOTE: this disburses to a payee (vendor/rent). Biller categories (GST, tax,
+ * education, card bill) settle through BBPS, a separate rail not wired here —
+ * without a destination the transfer is treated as a permanent failure, which
+ * auto-refunds the user.
  */
 export class CashfreePayoutProvider {
   constructor({ clientId, clientSecret, baseUrl }) {
     this.clientId = clientId;
     this.clientSecret = clientSecret;
-    this.baseUrl = baseUrl; // e.g. https://sandbox.cashfree.com/payout
+    this.baseUrl = baseUrl; // e.g. https://payout-api.cashfree.com/payout
   }
   get name() {
     return "cashfree";
   }
-
-  // TODO: Cashfree Payouts uses a token exchange (/payout/v1/authorize) then
-  // Bearer auth. Wire that, then call the standard transfer endpoint and map
-  // the response/status codes. Treat validation/KYC errors as permanent.
-  async initiatePayout({ amountMinor, reference, beneficiary }) {
-    const res = await fetch(`${this.baseUrl}/transfers`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        transfer_id: reference,
-        amount: (amountMinor / 100).toFixed(2),
-        beneficiary_details: beneficiary ?? {},
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    const s = data?.status ?? (res.ok ? "PENDING" : "FAILED");
+  get _headers() {
     return {
-      status: s === "SUCCESS" ? "SUCCESS" : s === "PENDING" ? "PENDING" : "FAILED",
-      utr: data?.utr ?? null,
-      failureReason: data?.reason ?? null,
-      permanent: res.status >= 400 && res.status < 500, // client errors = permanent
+      "x-client-id": this.clientId,
+      "x-client-secret": this.clientSecret,
+      "x-api-version": "2024-01-01",
+      "Content-Type": "application/json",
     };
   }
 
+  _beneficiaryDetails(b) {
+    if (!b) return null;
+    const name = b.registeredName || b.nickname || "Beneficiary";
+    if (b.type === "upi" && b.maskedAccount) {
+      return {
+        beneficiary_name: name,
+        beneficiary_instrument_details: { vpa: b.maskedAccount },
+      };
+    }
+    if (b.type === "bank" && b.accountNumber && b.ifsc) {
+      return {
+        beneficiary_name: name,
+        beneficiary_instrument_details: {
+          bank_account_number: b.accountNumber,
+          bank_ifsc: b.ifsc,
+        },
+      };
+    }
+    return null;
+  }
+
+  _map(res, data) {
+    const s = (data?.status ?? "").toUpperCase();
+    const status = s === "SUCCESS" ? "SUCCESS" : s === "FAILED" || s === "REJECTED" ? "FAILED" : "PENDING";
+    return {
+      status,
+      utr: data?.transfer_utr ?? null,
+      failureReason: data?.status_description ?? data?.message ?? null,
+      // 4xx (validation / bad beneficiary) won't succeed on retry.
+      permanent: status === "FAILED" || (res.status >= 400 && res.status < 500),
+    };
+  }
+
+  async initiatePayout({ amountMinor, reference, beneficiary }) {
+    const details = this._beneficiaryDetails(beneficiary);
+    if (!details) {
+      return { status: "FAILED", permanent: true, failureReason: "no_destination" };
+    }
+    const mode = beneficiary.type === "upi" ? "upi" : "banktransfer";
+    try {
+      const res = await fetch(`${this.baseUrl}/transfers`, {
+        method: "POST",
+        headers: this._headers,
+        body: JSON.stringify({
+          transfer_id: reference,
+          transfer_amount: Number((amountMinor / 100).toFixed(2)),
+          transfer_mode: mode,
+          beneficiary_details: details,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      return this._map(res, data);
+    } catch {
+      return { status: "FAILED", permanent: false, failureReason: "network_error" };
+    }
+  }
+
   async getPayoutStatus(reference) {
-    const res = await fetch(`${this.baseUrl}/transfers/${reference}`, {
-      headers: { "Content-Type": "application/json" },
-    });
+    const res = await fetch(
+      `${this.baseUrl}/transfers?transfer_id=${encodeURIComponent(reference)}`,
+      { headers: this._headers },
+    );
     const data = await res.json().catch(() => ({}));
-    return { status: data?.status ?? "PENDING", utr: data?.utr ?? null };
+    return { status: (data?.status ?? "PENDING").toUpperCase(), utr: data?.transfer_utr ?? null };
   }
 }
 
 export function makePayoutProvider(env = process.env) {
-  const useCashfree =
-    (env.PAYOUT_PROVIDER || "").toLowerCase() === "cashfree" &&
-    env.CASHFREE_PAYOUT_CLIENT_ID &&
-    env.CASHFREE_PAYOUT_CLIENT_SECRET;
-
-  if (useCashfree) {
+  if (env.CASHFREE_PAYOUT_CLIENT_ID && env.CASHFREE_PAYOUT_CLIENT_SECRET) {
+    const prod = (env.CASHFREE_ENV || "SANDBOX").toUpperCase() === "PRODUCTION";
     return new CashfreePayoutProvider({
       clientId: env.CASHFREE_PAYOUT_CLIENT_ID,
       clientSecret: env.CASHFREE_PAYOUT_CLIENT_SECRET,
-      baseUrl: env.CASHFREE_PAYOUT_BASE_URL || "https://sandbox.cashfree.com/payout",
+      baseUrl:
+        env.CASHFREE_PAYOUT_BASE_URL ||
+        (prod
+          ? "https://payout-api.cashfree.com/payout"
+          : "https://payout-gamma.cashfree.com/payout"),
     });
   }
   return new StubPayoutProvider();

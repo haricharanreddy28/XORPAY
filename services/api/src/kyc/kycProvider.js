@@ -12,23 +12,30 @@
 
 import { StubKycProvider } from "./stubProvider.js";
 import { HyperVergeKycProvider } from "./hypervergeProvider.js";
+import { CashfreeKycProvider } from "./cashfreeKycProvider.js";
+import { cashfreeVerificationConfigured } from "../verification/cashfreeVerification.js";
 
 /**
- * Pick a provider from env. Defaults to the stub unless HyperVerge creds are
- * present AND KYC_PROVIDER=hyperverge.
+ * Pick a provider from env:
+ *  - Cashfree Verification when its creds are set (the default), or
+ *    KYC_PROVIDER=cashfree.
+ *  - HyperVerge when KYC_PROVIDER=hyperverge + creds.
+ *  - Stub otherwise (dev/sandbox).
  */
 export function makeKycProvider(env = process.env) {
-  const useHv =
-    (env.KYC_PROVIDER || "").toLowerCase() === "hyperverge" &&
-    env.HYPERVERGE_APP_ID &&
-    env.HYPERVERGE_APP_KEY;
+  const choice = (env.KYC_PROVIDER || "").toLowerCase();
 
-  if (useHv) {
+  if (choice === "hyperverge" && env.HYPERVERGE_APP_ID && env.HYPERVERGE_APP_KEY) {
     return new HyperVergeKycProvider({
       appId: env.HYPERVERGE_APP_ID,
       appKey: env.HYPERVERGE_APP_KEY,
       baseUrl: env.HYPERVERGE_BASE_URL || "https://ind.idv.hyperverge.co",
     });
   }
+
+  if (choice === "cashfree" || cashfreeVerificationConfigured(env)) {
+    return new CashfreeKycProvider();
+  }
+
   return new StubKycProvider();
 }
