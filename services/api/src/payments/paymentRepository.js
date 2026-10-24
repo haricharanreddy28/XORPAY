@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { getDatabase } from "../db/database.js";
 
-const COLUMNS = "id,user_phone,beneficiary_id,category,currency,payee_minor,fee_minor,gst_minor,total_minor,state,cashfree_session_id,utr,failure_code,payout_provider_reference,created_at,updated_at";
+const COLUMNS = "id,user_phone,beneficiary_id,category,currency,payee_minor,fee_minor,gst_minor,total_minor,state,cashfree_session_id,utr,failure_code,payout_provider_reference,refund_id,refund_arn,refund_status,created_at,updated_at";
 
 function mapPayment(row) {
   if (!row) return null;
@@ -17,6 +17,9 @@ function mapPayment(row) {
     utr: row.utr,
     failureReason: row.failure_code,
     providerReference: row.payout_provider_reference,
+    refundId: row.refund_id,
+    refundArn: row.refund_arn,
+    refundStatus: row.refund_status,
     createdAt: row.created_at.getTime(),
     updatedAt: row.updated_at.getTime(),
   };
@@ -40,6 +43,17 @@ export async function createPayment({ id, phone, beneficiaryId, category, curren
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [phone]);
+    if (["vendor", "rent"].includes(String(category).toLowerCase())) {
+      const beneficiary = await client.query(
+        "SELECT id FROM xorpay_beneficiaries WHERE user_phone=$1 AND id=$2 AND verified=true FOR UPDATE",
+        [phone, beneficiaryId],
+      );
+      if (!beneficiary.rowCount) {
+        const error = new Error("verified_beneficiary_required");
+        error.code = "BENEFICIARY_NOT_VERIFIED";
+        throw error;
+      }
+    }
     if (["vendor", "rent"].includes(String(category).toLowerCase())) {
       const beneficiary = await client.query(
         "SELECT id FROM xorpay_beneficiaries WHERE user_phone=$1 AND id=$2 AND verified=true FOR UPDATE",
@@ -117,6 +131,7 @@ function ledgerLines(fee) {
 async function insertLedgerLines(client, paymentId, kind, lines) {
   for (let i = 0; i < lines.length; i++) {
     const [account,debit,credit] = lines[i];
+    if (debit === 0 && credit === 0) continue;
     await client.query("INSERT INTO xorpay_ledger_entries(payment_id,entry_kind,line_number,account,debit_minor,credit_minor) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (payment_id,entry_kind,line_number) DO NOTHING", [paymentId,kind,i+1,account,debit,credit]);
   }
 }
@@ -161,6 +176,112 @@ export async function claimPayoutJobs({ limit = 10, leaseSeconds = 60 } = {}) {
     [safeLimit,safeLease],
   );
   return result.rows;
+}
+
+
+export async function getPayoutJob(paymentId) {
+  const payment = await getPayment(paymentId);
+  if (!payment) return null;
+  const { getStoredBeneficiary } = await import("../beneficiaries/beneficiaryRepository.js");
+  const beneficiary = payment.beneficiaryId
+    ? await getStoredBeneficiary(payment.phone, payment.beneficiaryId)
+    : null;
+  return { payment, beneficiary };
+}
+
+export async function markPayoutProcessing(paymentId) {
+  const result = await getDatabase().query(
+    "UPDATE xorpay_payments SET state='PAYOUT_PROCESSING',updated_at=now() WHERE id=$1 AND state='PAYOUT_QUEUED' RETURNING id",
+    [paymentId],
+  );
+  return result.rowCount === 1;
+}
+
+export async function completePayoutSuccess(paymentId, { utr = null, providerReference = null } = {}) {
+  const client = await getDatabase().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query("SELECT payee_minor,state FROM xorpay_payments WHERE id=$1 FOR UPDATE", [paymentId]);
+    if (!result.rowCount || result.rows[0].state !== "PAYOUT_PROCESSING") {
+      await client.query("COMMIT");
+      return false;
+    }
+    const amount = Number(result.rows[0].payee_minor);
+    await insertLedgerLines(client, paymentId, "payout", [["escrow", amount, 0], ["payouts", 0, amount]]);
+    await client.query(
+      "UPDATE xorpay_payments SET state='SUCCESS',utr=$2,payout_provider_reference=COALESCE($3,payout_provider_reference),updated_at=now() WHERE id=$1",
+      [paymentId, utr, providerReference],
+    );
+    await client.query("UPDATE xorpay_payout_outbox SET state='DONE',lease_until=NULL,last_error_code=NULL,updated_at=now() WHERE payment_id=$1", [paymentId]);
+    await client.query("COMMIT");
+    return true;
+  } catch (error) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw error;
+  } finally { client.release(); }
+}
+
+export async function beginAutomaticRefund(paymentId, refundId, failureCode) {
+  const result = await getDatabase().query(
+    "UPDATE xorpay_payments SET state='REFUND_INITIATED',refund_id=$2,refund_status='PENDING',failure_code=$3,updated_at=now() " +
+    "WHERE id=$1 AND state='PAYOUT_PROCESSING' RETURNING id",
+    [paymentId, refundId, String(failureCode || "payout_failed").slice(0, 120)],
+  );
+  return result.rowCount === 1;
+}
+
+export async function updateRefundStatus(paymentId, status, refundArn = null) {
+  await getDatabase().query(
+    "UPDATE xorpay_payments SET refund_status=$2,refund_arn=COALESCE($3,refund_arn),updated_at=now() WHERE id=$1 AND state='REFUND_INITIATED'",
+    [paymentId, String(status || "PENDING").slice(0, 40), refundArn],
+  );
+}
+
+export async function completeAutomaticRefund(paymentId, { refundArn = null } = {}) {
+  const client = await getDatabase().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      "SELECT payee_minor,fee_minor,gst_minor,total_minor,state FROM xorpay_payments WHERE id=$1 FOR UPDATE",
+      [paymentId],
+    );
+    if (!result.rowCount || result.rows[0].state !== "REFUND_INITIATED") {
+      await client.query("COMMIT");
+      return false;
+    }
+    const row = result.rows[0];
+    await insertLedgerLines(client, paymentId, "refund", [
+      ["escrow", Number(row.payee_minor), 0],
+      ["fee_revenue", Number(row.fee_minor), 0],
+      ["gst_payable", Number(row.gst_minor), 0],
+      ["collections", 0, Number(row.total_minor)],
+    ]);
+    await client.query(
+      "UPDATE xorpay_payments SET state='REFUNDED',refund_status='SUCCESS',refund_arn=COALESCE($2,refund_arn),updated_at=now() WHERE id=$1",
+      [paymentId, refundArn],
+    );
+    await client.query("UPDATE xorpay_payout_outbox SET state='DONE',lease_until=NULL,last_error_code=NULL,updated_at=now() WHERE payment_id=$1", [paymentId]);
+    await client.query("COMMIT");
+    return true;
+  } catch (error) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw error;
+  } finally { client.release(); }
+}
+
+export async function releasePayoutJob(paymentId, { delaySeconds = 30, errorCode = null } = {}) {
+  const delay = Math.min(86_400, Math.max(1, Math.floor(delaySeconds)));
+  await getDatabase().query(
+    "UPDATE xorpay_payout_outbox SET state='READY',available_at=now()+($2 * interval '1 second'),lease_until=NULL,last_error_code=$3,updated_at=now() WHERE payment_id=$1 AND state='LEASED'",
+    [paymentId, delay, errorCode ? String(errorCode).slice(0, 120) : null],
+  );
+}
+
+export async function deadLetterPayoutJob(paymentId, errorCode) {
+  await getDatabase().query(
+    "UPDATE xorpay_payout_outbox SET state='DEAD',lease_until=NULL,last_error_code=$2,updated_at=now() WHERE payment_id=$1 AND state='LEASED'",
+    [paymentId, String(errorCode || "manual_review_required").slice(0, 120)],
+  );
 }
 
 export function sha256Hex(value) {

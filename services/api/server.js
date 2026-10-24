@@ -36,6 +36,7 @@ import {
   ledger,
 } from "./src/store.js";
 import { enqueuePayout } from "./src/payouts/payoutQueue.js";
+import { startDurablePayoutWorker } from "./src/payouts/durablePayoutWorker.js";
 import { tierForKyc, evaluate } from "./src/limits/limitsEngine.js";
 import { normalizePhone, pilotMode, pilotAllowedPhones, pilotCaps, pilotAccessAllowed, pilotCategoryAllowed } from "./src/config/pilot.js";
 import { getBeneficiary as getMemoryBeneficiary } from "./src/store.js";
@@ -60,8 +61,8 @@ const {
 
 if (process.env.NODE_ENV === "production" || CASHFREE_ENV.toUpperCase() === "PRODUCTION") {
   throw new Error(
-    "Production mode is disabled until PostgreSQL persistence, durable payouts, " +
-      "production admin authentication, and payment reconciliation are wired.",
+    "Production mode remains disabled until admin authentication/audit, all launch-critical domains, " +
+      "payment reconciliation, monitoring, and operational controls are independently verified.",
   );
 }
 
@@ -455,11 +456,18 @@ app.post("/auth/session/logout", async (req, res) => {
 async function startServer() {
   await connectAuthStore();
   if (databaseConfigured()) await connectDatabase();
-  app.listen(PORT, () => {
+  const durablePayoutWorker = databaseConfigured() ? startDurablePayoutWorker() : null;
+  const httpServer = app.listen(PORT, () => {
     console.log(`xorpay api on :${PORT} (Cashfree ${CASHFREE_ENV})`);
     console.log(`payments: ${cashfreeConfigured ? "enabled" : "disabled (no keys)"}`);
     console.log(`auth session store: ${process.env.REDIS_URL ? "Redis" : "in-memory development only"}`);
   });
+  const shutdown = () => {
+    durablePayoutWorker?.stop();
+    httpServer.close(() => process.exit(0));
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
 }
 
 startServer().catch((error) => {

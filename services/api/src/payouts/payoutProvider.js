@@ -127,7 +127,9 @@ export class CashfreePayoutProvider {
         headers: this._headers(crypto.randomUUID()),
         signal: AbortSignal.timeout(15_000),
       });
-      return mapResponse(await this._json(response), response.ok);
+      const data = await this._json(response);
+      if (response.status === 404) return { status: "NOT_FOUND" };
+      return mapResponse(data, response.ok);
     } catch {
       return { status: "PENDING", failureReason: "provider_status_unavailable" };
     }
