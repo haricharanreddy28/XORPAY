@@ -47,8 +47,14 @@ export function evaluate({
   spentMonthMinor = 0,
   beneficiaryVerified = true,
   unverifiedPerTxnCap = UNVERIFIED_PAYEE_PER_TXN,
+  caps = null,
 }) {
-  const limits = TIER_LIMITS[tier] ?? TIER_LIMITS[KycTier.MINIMAL];
+  const baseLimits = TIER_LIMITS[tier] ?? TIER_LIMITS[KycTier.MINIMAL];
+  const limits = caps ? {
+    perTxn: Math.min(baseLimits.perTxn, caps.perTxn),
+    daily: Math.min(baseLimits.daily, caps.daily),
+    monthly: Math.min(baseLimits.monthly, caps.monthly),
+  } : baseLimits;
   const base = {
     tier,
     limits,
@@ -80,5 +86,17 @@ export function evaluate({
     allowed: true,
     remainingDailyMinor: limits.daily - spentTodayMinor - amountMinor,
     remainingMonthlyMinor: limits.monthly - spentMonthMinor - amountMinor,
+  };
+}
+
+
+/** Return the effective limits shown by the app, including optional pilot caps. */
+export function limitsFor(tier, caps = null) {
+  const base = TIER_LIMITS[tier] ?? TIER_LIMITS[KycTier.MINIMAL];
+  if (!caps) return base;
+  return {
+    perTxn: Math.min(base.perTxn, caps.perTxn),
+    daily: Math.min(base.daily, caps.daily),
+    monthly: Math.min(base.monthly, caps.monthly),
   };
 }
