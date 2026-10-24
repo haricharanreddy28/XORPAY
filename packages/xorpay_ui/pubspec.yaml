@@ -11,7 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   google_fonts: ^6.2.1 # Sora (headings/amounts) + Inter (body)
-  sensors_plus: ^4.0.2 # gyro tilt for XCard3D (degrades gracefully)
+  sensors_plus: ^6.1.2 # gyro tilt for XCard3D (degrades gracefully)
 
 dev_dependencies:
   flutter_test:
