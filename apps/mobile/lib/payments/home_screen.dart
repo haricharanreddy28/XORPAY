@@ -6,6 +6,7 @@ import '../auth/session.dart';
 import '../beneficiaries/beneficiaries_screen.dart';
 import '../business/business_profile_screen.dart';
 import '../cards/cards_screen.dart';
+import '../invoices/gst_hub_screen.dart';
 import '../limits/limits_service.dart';
 import 'biller_pay_screens.dart';
 import 'card_bill_pay_screen.dart';
@@ -141,6 +142,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icons.credit_score_outlined,
                   label: 'Card bill',
                   onTap: () => _push(const CardBillPayScreen())),
+              CategoryItem(
+                  icon: Icons.inventory_2_outlined,
+                  label: 'GST Hub',
+                  onTap: () => _push(const GstHubScreen())),
               CategoryItem(
                   icon: Icons.qr_code_scanner,
                   label: 'Scan & Pay',
