@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import '../core/api_client.dart';
 
 /// Talks to the backend /kyc endpoints. All verification happens server-side;
@@ -50,9 +53,12 @@ class KycService {
     );
   }
 
-  Future<bool> completeSelfie(String sessionId) async {
-    final res = await _dio
-        .post('/kyc/selfie/complete', data: {'sessionId': sessionId});
+  Future<bool> completeSelfie(String sessionId, Uint8List imageBytes) async {
+    final res = await _dio.post('/kyc/selfie/complete', data: {
+      'sessionId': sessionId,
+      'imageMimeType': 'image/jpeg',
+      'imageBase64': base64Encode(imageBytes),
+    });
     return res.data['verified'] == true;
   }
 }

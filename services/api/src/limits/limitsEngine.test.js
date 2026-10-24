@@ -85,3 +85,23 @@ test("zero / invalid amount rejected", () => {
   assert.equal(evaluate({ tier: KycTier.FULL, amountMinor: 0 }).reason, "invalid_amount");
   assert.equal(evaluate({ tier: KycTier.FULL, amountMinor: -5 }).reason, "invalid_amount");
 });
+
+test("pilot caps further restrict KYC tier limits", () => {
+  const caps = { perTxn: 500_000, daily: 1_000_000, monthly: 5_000_000 };
+  const overTransaction = evaluate({
+    tier: KycTier.GST,
+    amountMinor: 500_001,
+    caps,
+  });
+  assert.equal(overTransaction.allowed, false);
+  assert.equal(overTransaction.reason, "per_transaction_limit");
+
+  const overDaily = evaluate({
+    tier: KycTier.GST,
+    amountMinor: 200_000,
+    spentTodayMinor: 900_000,
+    caps,
+  });
+  assert.equal(overDaily.allowed, false);
+  assert.equal(overDaily.reason, "daily_limit");
+});

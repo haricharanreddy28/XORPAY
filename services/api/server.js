@@ -11,9 +11,10 @@
 import express from "express";
 import crypto from "node:crypto";
 
-import { makeToken, requireAuth } from "./src/auth.js";
+import { createSession, rotateSession, revokeSession, connectAuthStore, requireAuth } from "./src/auth.js";
 import { sendVerification, checkVerification } from "./src/auth/twilioVerify.js";
-import { orders, getKyc, getSpend } from "./src/store.js";
+import { reserveOtpSend } from "./src/auth/otpRateLimit.js";
+import { orders, getKyc, getSpend as getMemorySpend } from "./src/store.js";
 import { kycRoutes } from "./src/kyc/kycRoutes.js";
 import { limitsRoutes } from "./src/limits/limitsRoutes.js";
 import { cardRoutes } from "./src/cards/cardRoutes.js";
@@ -27,7 +28,7 @@ import { supportRoutes } from "./src/support/supportRoutes.js";
 import { accountRoutes } from "./src/account/accountRoutes.js";
 import { computeCoins } from "./src/rewards/coins.js";
 import { awardCoins, listTransactions } from "./src/store.js";
-import { notify } from "./src/notifications/notifier.js";
+import { assertNotificationConfiguration, notify } from "./src/notifications/notifier.js";
 import { computeFee } from "./src/payments/fee.js";
 import { TxnState, canTransition } from "./src/payments/stateMachine.js";
 import {
@@ -36,7 +37,22 @@ import {
   ledger,
 } from "./src/store.js";
 import { enqueuePayout } from "./src/payouts/payoutQueue.js";
+import { startDurablePayoutWorker } from "./src/payouts/durablePayoutWorker.js";
+import { getKycProfile } from "./src/kyc/kycRepository.js";
 import { tierForKyc, evaluate } from "./src/limits/limitsEngine.js";
+import { normalizePhone, pilotMode, pilotAllowedPhones, pilotCaps, pilotAccessAllowed, pilotCategoryAllowed } from "./src/config/pilot.js";
+import { getBeneficiary as getMemoryBeneficiary } from "./src/store.js";
+import { getStoredBeneficiary } from "./src/beneficiaries/beneficiaryRepository.js";
+import { databaseConfigured, connectDatabase } from "./src/db/database.js";
+import {
+  createPayment as persistPayment,
+  setPaymentSession,
+  failPaymentBeforeCollection,
+  getPayment as getPersistentPayment,
+  getPaymentSpend,
+  settleCashfreePayment,
+  sha256Hex,
+} from "./src/payments/paymentRepository.js";
 
 const {
   CASHFREE_APP_ID,
@@ -45,7 +61,17 @@ const {
   PORT = 8080,
 } = process.env;
 
+if (process.env.NODE_ENV === "production" || CASHFREE_ENV.toUpperCase() === "PRODUCTION") {
+  throw new Error(
+    "Production mode remains disabled until admin authentication/audit, all launch-critical domains, " +
+      "payment reconciliation, monitoring, and operational controls are independently verified.",
+  );
+}
+
 const cashfreeConfigured = !!(CASHFREE_APP_ID && CASHFREE_SECRET_KEY);
+if (pilotMode && pilotAllowedPhones.size === 0) {
+  console.warn("[pilot] PILOT_MODE is enabled with an empty allowlist; all login attempts will be denied.");
+}
 if (!cashfreeConfigured) {
   console.warn(
     "[warn] CASHFREE_APP_ID/SECRET not set — payment routes return 503. " +
@@ -65,9 +91,28 @@ const cfHeaders = {
   "Content-Type": "application/json",
 };
 
+const adminCorsOrigins = new Set(
+  String(process.env.ADMIN_CORS_ORIGINS || (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000"))
+    .split(",").map((origin) => origin.trim()).filter(Boolean),
+);
+function adminCors(req, res, next) {
+  const origin = req.headers.origin;
+  if (origin && !adminCorsOrigins.has(origin)) return res.status(403).json({ error: "origin_not_allowed" });
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Token");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+}
+
 const app = express();
+app.use(adminCors);
 app.use(
   express.json({
+    limit: "2mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
@@ -75,41 +120,25 @@ app.use(
 );
 
 // --- OTP authentication (Twilio Verify by default) -----------------------
-function normalizePhone(value) {
-  if (typeof value !== "string") return null;
-  const phone = value.trim().replace(/[\s().-]/g, "");
-  if (/^[6-9]\d{9}$/.test(phone)) return `+91${phone}`;
-  if (/^91[6-9]\d{9}$/.test(phone)) return `+${phone}`;
-  if (/^\+[1-9]\d{7,14}$/.test(phone)) return phone;
-  return null;
-}
-
 const otpProvider = process.env.OTP_PROVIDER || "twilio";
 const otpStubCode = process.env.OTP_STUB_CODE || "123456";
 if (otpProvider === "stub" && process.env.NODE_ENV === "production") {
   throw new Error("OTP_PROVIDER=stub is disabled in production");
 }
-const otpRequestHistory = new Map();
 const OTP_RESEND_MS = 30_000;
 const OTP_MAX_PER_HOUR = 5;
 
 app.post("/auth/otp/request", async (req, res) => {
   const phone = normalizePhone(req.body?.phone);
   if (!phone) return res.status(400).json({ error: "invalid_phone" });
-
-  const key = `${req.ip}:${phone}`;
-  const now = Date.now();
-  const recent = (otpRequestHistory.get(key) || []).filter((time) => now - time < 3_600_000);
-  if (recent.length && now - recent[recent.length - 1] < OTP_RESEND_MS) {
-    return res.status(429).json({ error: "otp_cooldown" });
-  }
-  if (recent.length >= OTP_MAX_PER_HOUR) {
-    return res.status(429).json({ error: "otp_rate_limited" });
-  }
+  if (!pilotAccessAllowed(phone)) return res.status(403).json({ error: "pilot_access_required" });
 
   try {
+    const reserved = await reserveOtpSend(req.ip, phone);
+    if (!reserved) return res.status(429).json({ error: "otp_rate_limited" });
+
     if (otpProvider === "stub") {
-      if (process.env.NODE_ENV === "production") {
+      if (process.env.NODE_ENV === "production" || process.env.CASHFREE_ENV?.toUpperCase() === "PRODUCTION") {
         return res.status(503).json({ error: "otp_not_configured" });
       }
       console.info("[otp] non-production stub enabled");
@@ -118,9 +147,6 @@ app.post("/auth/otp/request", async (req, res) => {
     } else {
       return res.status(503).json({ error: "otp_provider_not_supported" });
     }
-
-    recent.push(now);
-    otpRequestHistory.set(key, recent);
     res.json({ ok: true });
   } catch (error) {
     const status = error?.status === 503 ? 503 : 502;
@@ -133,6 +159,7 @@ app.post("/auth/otp/verify", async (req, res) => {
   const phone = normalizePhone(req.body?.phone);
   const otp = req.body?.otp;
   if (!phone) return res.status(400).json({ error: "invalid_phone" });
+  if (!pilotAccessAllowed(phone)) return res.status(403).json({ error: "pilot_access_required" });
   if (typeof otp !== "string" || !/^\d{4,10}$/.test(otp)) {
     return res.status(400).json({ error: "invalid_otp" });
   }
@@ -147,7 +174,7 @@ app.post("/auth/otp/verify", async (req, res) => {
       return res.status(503).json({ error: "otp_provider_not_supported" });
     }
     if (!approved) return res.status(401).json({ error: "bad_otp" });
-    res.json({ access_token: makeToken(phone), refresh_token: null });
+    res.json(await createSession(phone));
   } catch (error) {
     const status = error?.status === 503 ? 503 : 502;
     console.error("[otp] verification check failed", status);
@@ -194,7 +221,6 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
   const {
     amount,
     currency = "INR",
-    beneficiaryVerified = true,
     beneficiaryId = null,
     category = null,
   } = req.body || {};
@@ -202,15 +228,48 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
     return res.status(400).json({ error: "invalid_amount" });
   }
 
-  // Server-side limits enforcement (never trust the client).
-  const kyc = getKyc(req.phone);
-  const { spentTodayMinor, spentMonthMinor } = getSpend(req.phone);
+  if (!pilotCategoryAllowed(category)) {
+    return res.status(403).json({ error: "category_disabled" });
+  }
+  let beneficiary = null;
+  if (beneficiaryId) {
+    try {
+      beneficiary = databaseConfigured()
+        ? await getStoredBeneficiary(req.phone, beneficiaryId)
+        : getMemoryBeneficiary(req.phone, beneficiaryId);
+    } catch (error) {
+      console.error("[payments] beneficiary lookup failed", error?.code || "unknown");
+      return res.status(503).json({ error: "beneficiary_storage_unavailable" });
+    }
+  }
+  const needsBeneficiary = ["vendor", "rent"].includes(String(category || "").toLowerCase());
+  if (needsBeneficiary && !beneficiary) {
+    return res.status(400).json({ error: "verified_beneficiary_required" });
+  }
+  if (needsBeneficiary && !beneficiary.verified) {
+    return res.status(403).json({ error: "beneficiary_not_verified" });
+  }
+
+  // Server-side limits enforcement (never trust client-supplied KYC or payee status).
+  let kyc;
+  let spentTodayMinor;
+  let spentMonthMinor;
+  try {
+    kyc = databaseConfigured() ? await getKycProfile(req.phone) : getKyc(req.phone);
+    ({ spentTodayMinor, spentMonthMinor } = databaseConfigured()
+      ? await getPaymentSpend(req.phone)
+      : getMemorySpend(req.phone));
+  } catch (error) {
+    console.error("[payments] KYC or limit lookup failed", error?.code || "unknown");
+    return res.status(503).json({ error: "limits_unavailable" });
+  }
   const decision = evaluate({
     tier: tierForKyc(kyc),
     amountMinor: amount,
     spentTodayMinor,
     spentMonthMinor,
-    beneficiaryVerified,
+    beneficiaryVerified: beneficiary ? Boolean(beneficiary.verified) : true,
+    caps: pilotMode ? pilotCaps : null,
   });
   if (!decision.allowed) {
     return res.status(403).json({ error: "limit_exceeded", reason: decision.reason });
@@ -223,6 +282,9 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
   const orderAmount = fee.youPayMinor / 100; // charge the total, in rupees
 
   try {
+    if (databaseConfigured()) {
+      await persistPayment({ id: orderId, phone: req.phone, beneficiaryId, category, currency, fee, limits: decision.limits });
+    }
     const r = await fetch(`${CF_BASE}/orders`, {
       method: "POST",
       headers: cfHeaders,
@@ -239,10 +301,14 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
     });
     const data = await r.json();
     if (!r.ok || !data.payment_session_id) {
-      console.error("[cashfree create]", r.status, data);
-      return res.status(502).json({ error: "psp_unavailable", detail: data });
+      if (databaseConfigured()) await failPaymentBeforeCollection(orderId, "provider_order_rejected");
+      console.error("[cashfree create] failed", r.status);
+      return res.status(502).json({ error: "psp_unavailable" });
     }
-    orders.set(orderId, { amountMinor: amount, phone: req.phone, status: "CREATED" });
+    if (databaseConfigured() && !(await setPaymentSession(orderId, data.payment_session_id))) {
+      return res.status(503).json({ error: "payment_persistence_unavailable" });
+    }
+    orders.set(orderId, { amountMinor: amount, phone: req.phone, status: "CREATED", beneficiaryId });
     createTransaction({
       id: orderId,
       phone: req.phone,
@@ -258,7 +324,17 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
       fee, // so the client can show the exact server-side breakdown
     });
   } catch (e) {
-    console.error("[cashfree create] threw", e);
+    if (databaseConfigured()) {
+      try { await failPaymentBeforeCollection(orderId, "provider_unavailable"); } catch {}
+    }
+    const limitErrors = {
+      PILOT_PER_TRANSACTION_LIMIT: "per_transaction_limit",
+      PILOT_DAILY_LIMIT: "daily_limit",
+      PILOT_MONTHLY_LIMIT: "monthly_limit",
+      BENEFICIARY_NOT_VERIFIED: "beneficiary_not_verified",
+    };
+    if (limitErrors[e?.code]) return res.status(403).json({ error: "limit_exceeded", reason: limitErrors[e.code] });
+    console.error("[cashfree create] threw", e?.code || "unknown");
     res.status(502).json({ error: "psp_unavailable" });
   }
 });
@@ -283,7 +359,8 @@ function markPaid(orderId) {
     isFirstTxn: priorPaid === 0,
   });
   awardCoins(txn.phone, coins, "payment", orderId);
-  notify(txn.phone, "Payment successful", `You earned ${coins} coins.`, "payment");
+  void notify(txn.phone, "Payment successful", `You earned ${coins} coins.`, "payment")
+    .catch((error) => console.error("[notification] persist failed", error?.code || "unknown"));
 
   // Queue the payout; the worker advances PAYOUT_QUEUED -> SUCCESS (or refunds).
   txn.state = TxnState.PAYOUT_QUEUED;
@@ -294,7 +371,9 @@ function markPaid(orderId) {
 // 2) Confirm: ask Cashfree for the real status (never trust the client).
 app.post("/payments/confirm", requireAuth, requireCashfree, async (req, res) => {
   const { order_id } = req.body || {};
-  const record = order_id && orders.get(order_id);
+  const record = order_id
+    ? (databaseConfigured() ? await getPersistentPayment(order_id) : orders.get(order_id))
+    : null;
   if (!record) return res.status(404).json({ error: "unknown_order" });
   if (record.phone !== req.phone) return res.status(403).json({ error: "not_owner" });
 
@@ -306,8 +385,9 @@ app.post("/payments/confirm", requireAuth, requireCashfree, async (req, res) => 
     const data = await r.json();
     const status = (data.order_status || "").toUpperCase();
     record.status = status;
-    if (status === "PAID") markPaid(order_id);
-    res.json({ order_id, status, amount: record.amountMinor });
+    // The client may observe provider status, but only the signature-verified
+    // webhook is allowed to post the ledger or enqueue the payout.
+    res.json({ order_id, status, amount: record.amountMinor ?? record.fee?.payeeMinor });
   } catch (e) {
     console.error("[cashfree get] threw", e);
     res.status(502).json({ error: "psp_unavailable" });
@@ -315,7 +395,7 @@ app.post("/payments/confirm", requireAuth, requireCashfree, async (req, res) => 
 });
 
 // 3) Webhook: Cashfree's authoritative paid/failed signal.
-app.post("/webhooks/cashfree", (req, res) => {
+app.post("/webhooks/cashfree", async (req, res) => {
   const signature = req.headers["x-webhook-signature"];
   const timestamp = req.headers["x-webhook-timestamp"];
   const expected = crypto
@@ -323,13 +403,39 @@ app.post("/webhooks/cashfree", (req, res) => {
     .update(String(timestamp) + (req.rawBody?.toString("utf8") ?? ""))
     .digest("base64");
 
-  if (!signature || signature !== expected) {
+  const receivedSignature = Buffer.from(String(signature || ""), "base64");
+  const expectedSignature = Buffer.from(expected, "base64");
+  if (!timestamp || receivedSignature.length !== expectedSignature.length || !crypto.timingSafeEqual(receivedSignature, expectedSignature)) {
     console.warn("[webhook] signature mismatch — rejecting");
     return res.status(401).json({ error: "bad_signature" });
   }
 
   const orderId = req.body?.data?.order?.order_id;
-  const orderStatus = req.body?.data?.order?.order_status || req.body?.type;
+  const eventType = String(req.body?.type || "unknown");
+  const paymentStatus = String(req.body?.data?.payment?.payment_status || req.body?.data?.order?.order_status || "").toUpperCase();
+  const orderStatus = paymentStatus || eventType;
+  if (databaseConfigured() && orderId) {
+    try {
+      const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
+      const isPaid = paymentStatus === "PAID" || paymentStatus === "SUCCESS" || eventType.includes("PAYMENT_SUCCESS");
+      const paymentId = req.body?.data?.payment?.cf_payment_id || "";
+      const eventKey = sha256Hex([eventType, orderId, paymentId, paymentStatus, sha256Hex(raw)].join("|"));
+      const settled = await settleCashfreePayment({
+        orderId,
+        eventKey,
+        eventType,
+        payloadSha256: sha256Hex(raw),
+        isPaid,
+      });
+      if (settled.unknownOrder) console.warn("[webhook] unknown order persisted for review");
+      const memoryTxn = getTransaction(orderId);
+      if (memoryTxn && settled.payment?.state === TxnState.PAYOUT_QUEUED) memoryTxn.state = TxnState.PAYOUT_QUEUED;
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error("[webhook] persistence failed", error?.code || "unknown");
+      return res.status(503).json({ error: "webhook_persistence_unavailable" });
+    }
+  }
   if (orderId && orders.has(orderId)) {
     orders.get(orderId).status = orderStatus; // idempotent: last write wins
     console.log(`[webhook] ${orderId} -> ${orderStatus}`);
@@ -345,7 +451,46 @@ app.get("/health", (_req, res) =>
   res.json({ ok: true, env: CASHFREE_ENV, payments: cashfreeConfigured })
 );
 
-app.listen(PORT, () => {
-  console.log(`xorpay api on :${PORT} (Cashfree ${CASHFREE_ENV})`);
-  console.log(`payments: ${cashfreeConfigured ? "enabled" : "disabled (no keys)"}`);
+app.post("/auth/session/refresh", async (req, res) => {
+  try {
+    const session = await rotateSession(req.body?.refresh_token);
+    if (!session) return res.status(401).json({ error: "invalid_refresh_token" });
+    res.json(session);
+  } catch (error) {
+    console.error("[auth] refresh failed", error?.code || "unknown");
+    res.status(503).json({ error: "session_store_unavailable" });
+  }
+});
+
+app.post("/auth/session/logout", async (req, res) => {
+  try {
+    await revokeSession(req.body?.refresh_token);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("[auth] logout failed", error?.code || "unknown");
+    res.status(503).json({ error: "session_store_unavailable" });
+  }
+});
+
+async function startServer() {
+  assertNotificationConfiguration(process.env);
+  await connectAuthStore();
+  if (databaseConfigured()) await connectDatabase();
+  const durablePayoutWorker = databaseConfigured() ? startDurablePayoutWorker() : null;
+  const httpServer = app.listen(PORT, () => {
+    console.log(`xorpay api on :${PORT} (Cashfree ${CASHFREE_ENV})`);
+    console.log(`payments: ${cashfreeConfigured ? "enabled" : "disabled (no keys)"}`);
+    console.log(`auth session store: ${process.env.REDIS_URL ? "Redis" : "in-memory development only"}`);
+  });
+  const shutdown = () => {
+    durablePayoutWorker?.stop();
+    httpServer.close(() => process.exit(0));
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
+}
+
+startServer().catch((error) => {
+  console.error("[startup] failed", error?.message || "unknown");
+  process.exitCode = 1;
 });

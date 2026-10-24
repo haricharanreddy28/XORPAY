@@ -13,6 +13,16 @@ export function isValidVpa(vpa) {
   return VPA_RE.test(String(vpa ?? ""));
 }
 
+/** Mask the VPA handle but retain the provider suffix for user confirmation. */
+export function maskVpa(vpa) {
+  const value = String(vpa ?? "");
+  const at = value.lastIndexOf("@");
+  if (at < 1) return "••••";
+  const handle = value.slice(0, at);
+  const suffix = value.slice(at + 1);
+  return `${handle.slice(0, Math.min(2, handle.length))}•••@${suffix}`;
+}
+
 /** Account numbers are 9–18 digits in India. */
 export function isValidAccount(acc) {
   return /^\d{9,18}$/.test(String(acc ?? ""));

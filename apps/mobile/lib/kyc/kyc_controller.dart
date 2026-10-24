@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'kyc_service.dart';
 
@@ -67,21 +68,38 @@ class KycController extends ChangeNotifier {
         return r.verified;
       }, 'We couldn’t verify this PAN. Check and try again.');
 
-  /// DigiLocker: start then complete. (A full flow opens [AadhaarInit.url] for
-  /// consent between these calls; the dev stub completes immediately.)
+  /// Opens Cashfree DigiLocker, then checks consent and document status on return.
   Future<void> submitAadhaar() => _run(() async {
         final init = await _service.initAadhaar();
-        final ok = await _service.completeAadhaar(init.requestId);
-        aadhaarVerified = ok;
-        return ok;
+        final url = init.url;
+        if (url == null || !await launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.externalApplication,
+        )) {
+          return false;
+        }
+        // DigiLocker may take a moment to return consent. Bound the status
+        // checks so an abandoned session cannot keep onboarding busy.
+        for (var attempt = 0; attempt < 12; attempt++) {
+          await Future<void>.delayed(const Duration(seconds: 5));
+          if (await _service.completeAadhaar(init.requestId)) {
+            aadhaarVerified = true;
+            return true;
+          }
+        }
+        return false;
       }, 'Aadhaar verification didn’t complete. Please try again.');
 
-  /// Liveness: mint a session then record the result. (A full flow runs the
-  /// Face SDK with [SelfieSession.sdkToken] between these calls.)
-  Future<void> submitSelfie() => _run(() async {
+  /// Sends a captured front-camera image to Cashfree Face Liveness.
+  Future<void> submitSelfie(Uint8List imageBytes) => _run(() async {
         final session = await _service.selfieSession();
-        final ok = await _service.completeSelfie(session.sessionId);
+        final ok = await _service.completeSelfie(session.sessionId, imageBytes);
         selfieCaptured = ok;
         return ok;
       }, 'Selfie check didn’t pass. Please try again in good light.');
+
+  void showError(String message) {
+    _error = message;
+    notifyListeners();
+  }
 }

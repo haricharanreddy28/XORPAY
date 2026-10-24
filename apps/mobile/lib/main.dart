@@ -1,11 +1,22 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app.dart';
 import 'auth/session.dart';
+import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  final firebaseOptions = XorpayFirebaseOptions.current;
+  if (firebaseOptions != null) {
+    try {
+      await Firebase.initializeApp(options: firebaseOptions);
+    } catch (_) {
+      debugPrint('Firebase initialization failed; push notifications are unavailable.');
+    }
+  }
 
   final session = Session();
   await session.bootstrap();

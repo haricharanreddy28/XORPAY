@@ -6,21 +6,23 @@ import {
   isValidVpa,
   isValidAccount,
   maskAccount,
+  maskVpa,
   validateBeneficiary,
 } from "./validate.js";
 
 test("IFSC validation", () => {
   assert.equal(isValidIfsc("HDFC0001234"), true);
-  assert.equal(isValidIfsc("hdfc0001234"), true); // case-insensitive
-  assert.equal(isValidIfsc("HDFC1001234"), false); // 5th char must be 0
-  assert.equal(isValidIfsc("HDF0001234"), false); // too short
+  assert.equal(isValidIfsc("hdfc0001234"), true);
+  assert.equal(isValidIfsc("HDFC1001234"), false);
+  assert.equal(isValidIfsc("HDF0001234"), false);
 });
 
-test("VPA validation", () => {
+test("VPA validation and safe masking", () => {
   assert.equal(isValidVpa("ramesh@okhdfcbank"), true);
   assert.equal(isValidVpa("9999999999@ybl"), true);
   assert.equal(isValidVpa("nope"), false);
   assert.equal(isValidVpa("@psp"), false);
+  assert.equal(maskVpa("ramesh@okhdfcbank"), "ra•••@okhdfcbank");
 });
 
 test("account number + masking", () => {

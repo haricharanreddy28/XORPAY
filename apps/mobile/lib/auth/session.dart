@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../core/api_client.dart';
 import '../core/secure_storage.dart';
+import '../notifications/notification_service.dart';
 
 /// Minimal auth/session controller.
 ///
@@ -14,6 +15,7 @@ class Session extends ChangeNotifier {
   Future<void> bootstrap() async {
     _authenticated = (await SecureStore.instance.accessToken) != null;
     notifyListeners();
+    if (_authenticated) await NotificationService.instance.registerCurrentDevice();
   }
 
   /// Step 1: ask backend to send an OTP to [phone].
@@ -33,9 +35,22 @@ class Session extends ChangeNotifier {
     );
     _authenticated = true;
     notifyListeners();
+    await NotificationService.instance.registerCurrentDevice();
   }
 
   Future<void> logout() async {
+    await NotificationService.instance.unregisterCurrentDevice();
+    final refreshToken = await SecureStore.instance.refreshToken;
+    if (refreshToken != null) {
+      try {
+        await ApiClient.instance.dio.post(
+          '/auth/session/logout',
+          data: {'refresh_token': refreshToken},
+        );
+      } catch (_) {
+        // Local logout still succeeds if the API is offline.
+      }
+    }
     await SecureStore.instance.clear();
     _authenticated = false;
     notifyListeners();

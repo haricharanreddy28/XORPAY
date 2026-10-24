@@ -1,0 +1,6 @@
+aws_account_id = "000000000000"
+aws_region     = "ap-south-1"
+environment    = "pilot"
+root_domain    = "xorpay.online"
+api_hostname   = "api.xorpay.online"
+admin_hostname = "admin.xorpay.online"

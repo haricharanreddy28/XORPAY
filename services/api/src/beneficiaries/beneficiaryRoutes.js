@@ -8,11 +8,17 @@ import {
   updateBeneficiary,
   removeBeneficiary,
 } from "../store.js";
-import { validateBeneficiary, maskAccount } from "./validate.js";
+import { validateBeneficiary, maskAccount, maskVpa } from "./validate.js";
 import { makeBeneficiaryVerifier } from "./verifierProvider.js";
+import { databaseConfigured } from "../db/database.js";
+import {
+  createStoredBeneficiary,
+  getStoredBeneficiary,
+  listStoredBeneficiaries,
+  removeStoredBeneficiary,
+  updateStoredBeneficiaryVerification,
+} from "./beneficiaryRepository.js";
 
-// Beneficiary routes (spec §3.3): add with instant name verification, list,
-// re-verify and delete. The verifier is swappable (stub / Cashfree Payouts).
 export function beneficiaryRoutes() {
   const router = Router();
   const verifier = makeBeneficiaryVerifier();
@@ -24,10 +30,16 @@ export function beneficiaryRoutes() {
       : verifier.verifyUpi({ vpa: body.vpa });
   }
 
-  router.get("/", (req, res) => {
-    // Never return the full account number — only the masked handle.
-    const safe = listBeneficiaries(req.phone).map(({ accountNumber, ...b }) => b);
-    res.json({ beneficiaries: safe });
+  router.get("/", async (req, res) => {
+    try {
+      const beneficiaries = databaseConfigured()
+        ? await listStoredBeneficiaries(req.phone)
+        : listBeneficiaries(req.phone).map(({ accountNumber, vpa, ...safe }) => safe);
+      res.json({ beneficiaries });
+    } catch (error) {
+      console.error("[beneficiary] list failed", error?.code || "unknown");
+      res.status(503).json({ error: "beneficiary_storage_unavailable" });
+    }
   });
 
   router.post("/", async (req, res) => {
@@ -42,45 +54,76 @@ export function beneficiaryRoutes() {
       return res.status(502).json({ error: "verifier_error" });
     }
 
-    const handle = check.type === "bank" ? maskAccount(body.accountNumber) : body.vpa;
-    const record = addBeneficiary(req.phone, {
+    const input = {
       type: check.type,
-      nickname: body.nickname ?? null,
-      maskedAccount: handle,
+      nickname: typeof body.nickname === "string" ? body.nickname.trim().slice(0, 80) : null,
+      maskedAccount: check.type === "bank" ? maskAccount(body.accountNumber) : maskVpa(body.vpa),
       ifsc: check.type === "bank" ? String(body.ifsc).toUpperCase() : null,
-      // Full account kept for payouts. TODO: field-level encryption (spec §6).
       accountNumber: check.type === "bank" ? String(body.accountNumber) : null,
-      verified: result.verified,
+      vpa: check.type === "upi" ? String(body.vpa) : null,
+      verified: Boolean(result.verified && result.registeredName),
       registeredName: result.registeredName ?? null,
-    });
+    };
 
-    const { accountNumber, ...safe } = record;
-    res.status(201).json(safe);
-  });
-
-  router.post("/:id/verify", async (req, res) => {
-    const b = getBeneficiary(req.phone, req.params.id);
-    if (!b) return res.status(404).json({ error: "unknown_beneficiary" });
     try {
-      const result = await verify(b.type, {
-        accountNumber: b.accountNumber,
-        ifsc: b.ifsc,
-        vpa: b.maskedAccount,
-      });
-      const updated = updateBeneficiary(req.phone, b.id, {
-        verified: result.verified,
-        registeredName: result.registeredName ?? b.registeredName,
-      });
-      const { accountNumber, ...safe } = updated;
-      res.json(safe);
-    } catch {
-      res.status(502).json({ error: "verifier_error" });
+      const record = databaseConfigured()
+        ? await createStoredBeneficiary(req.phone, input)
+        : addBeneficiary(req.phone, input);
+      const { accountNumber, vpa, ...safe } = record;
+      res.status(201).json(safe);
+    } catch (error) {
+      if (error?.code === "BENEFICIARY_ENCRYPTION_NOT_CONFIGURED") {
+        return res.status(503).json({ error: "beneficiary_storage_not_configured" });
+      }
+      console.error("[beneficiary] persistence failed", error?.code || "unknown");
+      res.status(503).json({ error: "beneficiary_storage_unavailable" });
     }
   });
 
-  router.delete("/:id", (req, res) => {
-    removeBeneficiary(req.phone, req.params.id);
-    res.json({ ok: true });
+  router.post("/:id/verify", async (req, res) => {
+    try {
+      const beneficiary = databaseConfigured()
+        ? await getStoredBeneficiary(req.phone, req.params.id)
+        : getBeneficiary(req.phone, req.params.id);
+      if (!beneficiary) return res.status(404).json({ error: "unknown_beneficiary" });
+
+      const result = await verify(beneficiary.type, {
+        accountNumber: beneficiary.accountNumber,
+        ifsc: beneficiary.ifsc,
+        vpa: beneficiary.vpa ?? beneficiary.maskedAccount,
+      });
+      const patch = {
+        verified: Boolean(result.verified),
+        registeredName: result.registeredName ?? beneficiary.registeredName,
+      };
+      const updated = databaseConfigured()
+        ? await updateStoredBeneficiaryVerification(req.phone, beneficiary.id, patch)
+        : updateBeneficiary(req.phone, beneficiary.id, patch);
+      if (!updated) return res.status(404).json({ error: "unknown_beneficiary" });
+      const { accountNumber, vpa, ...safe } = updated;
+      res.json(safe);
+    } catch (error) {
+      console.error("[beneficiary] verification failed", error?.code || "unknown");
+      const status = error?.code === "BENEFICIARY_ENCRYPTION_KEY_UNAVAILABLE" ? 503 : 502;
+      res.status(status).json({ error: status === 503 ? "beneficiary_storage_unavailable" : "verifier_error" });
+    }
+  });
+
+  router.delete("/:id", async (req, res) => {
+    try {
+      if (databaseConfigured()) {
+        const result = await removeStoredBeneficiary(req.phone, req.params.id);
+        if (result.reason === "payment_in_progress") {
+          return res.status(409).json({ error: "beneficiary_has_payment_in_progress" });
+        }
+      } else {
+        removeBeneficiary(req.phone, req.params.id);
+      }
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("[beneficiary] delete failed", error?.code || "unknown");
+      res.status(503).json({ error: "beneficiary_storage_unavailable" });
+    }
   });
 
   return router;

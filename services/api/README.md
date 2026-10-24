@@ -1,8 +1,6 @@
 # Xorpay test backend (Cashfree sandbox)
 
-Minimal Node/Express server so you can run a **real Cashfree checkout with test
-money** and phone verification through Twilio Verify. In-memory auth/payment state — **not
-production**.
+Node/Express API for Cashfree checkout and Twilio Verify. Refresh sessions use Redis when configured. Payment orders, collection ledger entries, verified webhook receipts, and payout outbox rows can use PostgreSQL; other business domains still have in-memory stores, so this is **not production-ready**.
 
 ## 1. Get sandbox keys
 1. merchant.cashfree.com → Developers → API Keys → **Sandbox** → copy App ID + Secret Key.
@@ -12,7 +10,9 @@ production**.
 ```bash
 cd services/api
 npm install
-# Set these in your shell or a local .env loader; never commit real credentials.
+# Configure DATABASE_URL for local PostgreSQL, then apply the SQL schema:
+npm run migrate
+# Set provider credentials in your shell or a local .env loader; never commit real credentials.
 CASHFREE_APP_ID=xxx CASHFREE_SECRET_KEY=yyy \
 TWILIO_ACCOUNT_SID=AC... TWILIO_AUTH_TOKEN=... \
 TWILIO_VERIFY_SERVICE_SID=VA... node server.js
@@ -46,7 +46,9 @@ flutter run \
 | Route | Purpose |
 |---|---|
 | `POST /auth/otp/request` | send an SMS through Twilio Verify |
-| `POST /auth/otp/verify` | verify the code through Twilio Verify; returns a test token |
+| `POST /auth/otp/verify` | verify the code; returns a signed 15-minute access JWT and rotating refresh token |
+| `POST /auth/session/refresh` | rotate a one-time refresh token (Redis in deployment) |
+| `POST /auth/session/logout` | revoke a refresh token
 | `POST /kyc/pan` | verify PAN (provider) |
 | `POST /kyc/gstin` | verify GSTIN → higher tier |
 | `POST /kyc/aadhaar/init` · `/aadhaar/complete` | DigiLocker/OKYC start + finish |
@@ -58,7 +60,7 @@ flutter run \
 | `GET /beneficiaries` · `POST /beneficiaries` | list / add + verify payee |
 | `POST /beneficiaries/:id/verify` · `DELETE /beneficiaries/:id` | re-verify / remove |
 | `POST /payments/orders` | limits check → fee → Cashfree order (charges youPay) |
-| `POST /payments/confirm` | reads real status; settles ledger + state on PAID |
+| `POST /payments/confirm` | reports Cashfree status only; signed webhook settles the payment |
 | `GET /transactions` · `GET /transactions/:id` | history + detail (with ledger) |
 | `POST /invoices/import` | pull purchase invoices from GSTR-2A/2B |
 | `GET /invoices` · `GET /invoices/suppliers` | list / unpaid totals by supplier |
@@ -78,7 +80,7 @@ flutter run \
 - **Limits engine** (`src/limits/limitsEngine.js`) is pure and unit-tested
   (`npm test`): KYC tier → per-transaction / daily / monthly caps, with a lower
   cap for unverified beneficiaries. It's enforced server-side in `/payments/orders`.
-- Spend tracking is stubbed at 0 until the ledger lands (Phase 4).
+- When `DATABASE_URL` is configured, payment spend is read from PostgreSQL and each new order reserves daily/monthly cap under a per-user advisory lock. The in-memory path remains for local tests without a database.
 
 ## Cards & beneficiaries (Phase 3)
 - **Cards** (`src/cards/`): the backend stores only the PSP **token reference**
@@ -102,14 +104,23 @@ flutter run \
 - **State machine** (`src/payments/stateMachine.js`): CREATED → PAYMENT_PENDING
   → PAID → PAYOUT_QUEUED → PAYOUT_PROCESSING → SUCCESS | FAILED →
   REFUND_INITIATED → REFUNDED. Illegal transitions throw.
-- Settlement is **idempotent**: `markPaid` posts the ledger + advances state
-  once, driven by the confirm endpoint and (authoritatively) the webhook.
-- **Payout queue** (`src/payouts/`): on PAID the transaction is enqueued; the
-  PayoutProcessor runs PAYOUT_QUEUED → PAYOUT_PROCESSING → SUCCESS via a
-  swappable payout provider (stub / Cashfree Payouts skeleton), retries
-  transient failures, and on a permanent failure **auto-refunds to source**
-  (REFUND_INITIATED → REFUNDED, reversing the ledger). In-process for dev;
-  BullMQ/Redis with a dead-letter queue comes with the NestJS migration.
+- With PostgreSQL configured, verified Cashfree webhook receipt, state transition,
+  balanced ledger lines, and payout outbox insert share one transaction. Unique
+  event keys plus a row lock prevent duplicate concurrent ledger posts. Confirm
+  only reports status; it never settles or queues a payout.
+- **PostgreSQL core** (`migrations/001_payment_core.sql`): payments, balanced
+  ledger lines, webhook dedupe records, encrypted-destination storage schema,
+  and a `FOR UPDATE SKIP LOCKED` payout outbox lease query. Apply with
+  `npm run migrate`; production TLS is mandatory. The durable outbox still needs
+  its worker, beneficiary persistence/encryption, and refund lifecycle before launch.
+- **Payout adapter** (`src/payouts/payoutProvider.js`): Cashfree Payouts v2
+  uses its separate client ID/secret, `/transfers`, and API version `2024-01-01`.
+  Configure `PAYOUT_PROVIDER=cashfree` and the separate `CASHFREE_PAYOUT_*`
+  values from Secrets Manager. Local development defaults to the fake provider.
+  Pending or ambiguous outcomes remain `PAYOUT_PROCESSING`; they are never
+  blindly resubmitted or refunded. `reconcileOne` queries the original transfer
+  ID. The scheduler and state are still in-process, so durable retries,
+  reconciliation jobs and auto-refund execution remain production blockers.
 - Next slice: the app's vendor/rent flows + receipts.
 
 ## GST Hub / invoices (Phase 5)
@@ -137,9 +148,64 @@ npm test   # node --test — runs the limits engine suite
 ```
 
 ## Before production (do not skip)
-- Replace the in-memory OTP rate limiter and base64 tokens with shared rate limiting and signed JWT/session auth with device binding.
-- Replace the in-memory `orders` Map with a database; add idempotency keys.
-- Register the webhook URL in the Cashfree dashboard and rely on it for "paid".
-- Move secret key to a secrets manager; never commit it.
-- Switch keys + `CASHFREE_ENV=PRODUCTION` only after business KYC is approved;
-  first live test with ₹1, then refund.
+- The API refuses to start with `NODE_ENV=production` or
+  `CASHFREE_ENV=PRODUCTION` until persistence, payouts, admin auth, and
+  reconciliation are completed.
+- The core payment order, webhook, ledger, and outbox path has PostgreSQL support.
+  Beneficiaries, KYC, cards, rewards, support, admin audit, OTP limits, and other
+  business domains remain process-local and must move to durable stores.
+- Run the Cashfree Payouts adapter against your sandbox account, validate
+  beneficiary-field mapping and final-status semantics, then enable production
+  credentials only after the account's approved workflow is confirmed.
+- Wire production KYC, invoice/GSP and notification providers.
+- Configure TLS, monitoring, audit trails, legal disclosures, and an allowlist
+  before the real-money pilot.
+- Store all credentials only in AWS Secrets Manager; rotate any credentials
+  that were pasted into chat or committed by mistake.
+
+## Pilot auth foundation
+- Access tokens are HMAC-SHA256 signed JWTs with a 15-minute lifetime. Set a
+  unique `JWT_SECRET` of at least 32 bytes in the secret manager.
+- Refresh tokens are random, stored only as SHA-256 hashes, expire after 30
+  days, and rotate atomically via Redis. Local non-production runs may use an
+  in-memory session store when `REDIS_URL` is unset.
+- The Flutter API client refreshes once on 401 and clears the local session if
+  refresh fails. Logout revokes the refresh token.
+- Several business domains and payout execution remain in-memory; this API is not
+  safe for live-money traffic. A durable payout worker/reconciliation, persistent
+  beneficiary data and encryption, individual admin identity/audit, and sandbox
+  verification of provider mappings remain release blockers.
+
+
+## Limited-pilot controls (proposed defaults)
+- Set `PILOT_MODE=true` only after the API has durable persistence and an
+  approved production payment path. An empty allowlist denies all OTP requests.
+- Store `PILOT_ALLOWLIST_PHONES` as E.164 phone numbers in AWS Secrets Manager.
+  The default maximum is 10 users; default allowed categories are vendor/rent.
+- Default per-user caps are ₹5,000 per transaction, ₹10,000 per day, and
+  ₹50,000 per month. Override only after your risk owner approves the amounts.
+- Order creation resolves beneficiary verification server-side; it ignores any
+  client-provided verified flag. Only the signed Cashfree webhook can trigger
+  ledger settlement and payout; `/payments/confirm` only reports provider status.
+
+
+## Real notification channels
+- Sign-in OTP uses Twilio Verify. Configure the Verify Service and Twilio credentials
+  from Secrets Manager; never reuse credentials pasted in chat. Use a dedicated
+  Twilio Messaging Service for transactional SMS and collect explicit user opt-in.
+- Transactional email and email verification use Amazon SES v2 in `ap-south-1`
+  with the API task role. Verify the sender/domain and move SES out of sandbox
+  before real recipients can receive mail.
+- Push uses Firebase Cloud Messaging Admin. Store the Firebase service account
+  JSON in Secrets Manager; the app initializes from per-platform Firebase values
+  provided as Flutter build-time defines.
+- `POST /notifications/email/request` sends a short-lived verification code;
+  `POST /notifications/email/verify` confirms it. `POST /notifications/devices`
+  registers an encrypted FCM token. Notification preferences default off except
+  push after device registration. Notification records and contact/device data
+  persist in PostgreSQL migration `006_notification_channels.sql`.
+- A production boot requires Twilio Verify + Messaging, SES sender, Firebase
+  Admin credentials, and Mumbai AWS region. Provider credentials are not checked
+  against live provider APIs during startup; account activation, SES production
+  access, sender/domain verification, and Firebase project setup remain operator
+  checks. External delivery failures do not change payment settlement.

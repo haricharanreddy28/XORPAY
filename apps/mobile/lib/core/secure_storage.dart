@@ -22,6 +22,8 @@ class SecureStore {
     await _storage.write(key: _kAccessToken, value: accessToken);
     if (refreshToken != null) {
       await _storage.write(key: _kRefreshToken, value: refreshToken);
+    } else {
+      await _storage.delete(key: _kRefreshToken);
     }
   }
 
