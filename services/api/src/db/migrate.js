@@ -15,7 +15,7 @@ async function migrate() {
     await client.query("CREATE TABLE IF NOT EXISTS xorpay_schema_migrations (version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
     const applied = await client.query("SELECT version FROM xorpay_schema_migrations");
     const done = new Set(applied.rows.map((row) => row.version));
-    const files = (await readdir(migrationsDir)).filter((name) => /^[0-9]+_[a-z0-9_]+\\.sql$/.test(name)).sort();
+    const files = (await readdir(migrationsDir)).filter((name) => /^[0-9]+_[a-z0-9_]+\.sql$/.test(name)).sort();
 
     for (const file of files) {
       if (done.has(file)) continue;
