@@ -10,6 +10,8 @@ import '../invoices/gst_hub_screen.dart';
 import '../limits/limits_service.dart';
 import '../notifications/notification_service.dart';
 import '../notifications/notifications_screen.dart';
+import '../settings/settings_screen.dart';
+import '../support/support_screen.dart';
 import '../rewards/rewards_screen.dart';
 import '../rewards/rewards_service.dart';
 import 'biller_pay_screens.dart';
@@ -211,6 +213,30 @@ class _HomeScreenState extends State<HomeScreen> {
               label: 'Add GST details',
               icon: Icons.business_center_outlined,
               onPressed: _openBusinessProfile,
+            ),
+            const SizedBox(height: XSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: XButton.secondary(
+                    label: 'Support',
+                    icon: Icons.support_agent,
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SupportScreen()),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: XSpacing.md),
+                Expanded(
+                  child: XButton.secondary(
+                    label: 'Settings',
+                    icon: Icons.settings_outlined,
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:xorpay_ui/xorpay_ui.dart';
 
+import '../support/support_service.dart';
 import 'transactions_screen.dart' show StatusChip;
 import 'transaction_service.dart';
 
@@ -21,6 +22,22 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   void initState() {
     super.initState();
     _txn = TransactionService.instance.get(widget.id);
+  }
+
+  Future<void> _raiseDispute(Txn t) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await SupportService.instance.create(
+        subject: 'Dispute: ${t.category ?? 'payment'} ${t.id}',
+        body: 'I want to raise a dispute about this transaction.',
+        txnId: t.id,
+      );
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Dispute raised — we’ll be in touch.')));
+    } catch (_) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Couldn’t raise the dispute.')));
+    }
   }
 
   @override
@@ -63,6 +80,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 Text('Reason: ${t.failureReason}',
                     style: XType.caption.copyWith(color: xc.error)),
               ],
+              const SizedBox(height: XSpacing.xl),
+              XButton.secondary(
+                label: 'Raise a dispute',
+                icon: Icons.gavel_outlined,
+                onPressed: () => _raiseDispute(t),
+              ),
             ],
           );
         },

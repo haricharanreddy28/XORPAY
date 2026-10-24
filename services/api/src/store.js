@@ -28,6 +28,54 @@ const referralCodes = new Map();
 /** phone -> [ notification ] */
 const notifications = new Map();
 
+/** phone -> [ support ticket ] */
+const tickets = new Map();
+
+export function listTickets(phone) {
+  return (tickets.get(phone) ?? []).sort((a, b) => b.createdAt - a.createdAt);
+}
+export function getTicket(phone, id) {
+  return (tickets.get(phone) ?? []).find((t) => t.id === id) ?? null;
+}
+export function createTicket(phone, ticket) {
+  const record = {
+    id: newId("tkt"),
+    status: "open",
+    createdAt: Date.now(),
+    messages: [],
+    ...ticket,
+  };
+  tickets.set(phone, [...(tickets.get(phone) ?? []), record]);
+  return record;
+}
+export function addTicketMessage(phone, id, msg) {
+  const list = tickets.get(phone) ?? [];
+  tickets.set(
+    phone,
+    list.map((t) => (t.id === id ? { ...t, messages: [...t.messages, msg] } : t)),
+  );
+  return getTicket(phone, id);
+}
+
+/** phone -> account profile / settings */
+const accounts = new Map();
+
+export function getAccount(phone) {
+  return (
+    accounts.get(phone) ?? {
+      phone,
+      language: "en",
+      notificationsEnabled: true,
+      deletionScheduledAt: null,
+    }
+  );
+}
+export function updateAccount(phone, patch) {
+  const next = { ...getAccount(phone), ...patch };
+  accounts.set(phone, next);
+  return next;
+}
+
 /** refund_id -> refund request (maker-checker) */
 const refundRequests = new Map();
 

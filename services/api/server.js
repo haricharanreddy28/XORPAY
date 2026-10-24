@@ -22,6 +22,8 @@ import { invoiceRoutes } from "./src/invoices/invoiceRoutes.js";
 import { rewardsRoutes, referralRoutes } from "./src/rewards/rewardsRoutes.js";
 import { notificationRoutes } from "./src/notifications/notificationRoutes.js";
 import { adminRoutes } from "./src/admin/adminRoutes.js";
+import { supportRoutes } from "./src/support/supportRoutes.js";
+import { accountRoutes } from "./src/account/accountRoutes.js";
 import { computeCoins } from "./src/rewards/coins.js";
 import { awardCoins, listTransactions } from "./src/store.js";
 import { notify } from "./src/notifications/notifier.js";
@@ -104,6 +106,10 @@ app.use("/invoices", invoiceRoutes());
 app.use("/rewards", rewardsRoutes());
 app.use("/referrals", referralRoutes());
 app.use("/notifications", notificationRoutes());
+
+// --- support, account, statements ----------------------------------------
+app.use("/support", supportRoutes());
+app.use("/account", accountRoutes());
 
 // --- admin & ops ---------------------------------------------------------
 app.use("/admin", adminRoutes());
