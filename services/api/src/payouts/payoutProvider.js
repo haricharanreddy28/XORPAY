@@ -21,7 +21,7 @@ export class StubPayoutProvider {
 function mapResponse(data, httpOk = true) {
   const raw = String(data?.status ?? "").toUpperCase();
   if (FINAL_SUCCESS.has(raw)) {
-    return { status: "SUCCESS", utr: data?.utr ?? null, providerReference: data?.cf_transfer_id ?? null };
+    return { status: "SUCCESS", utr: data?.transfer_utr ?? data?.utr ?? null, providerReference: data?.cf_transfer_id ?? null };
   }
   if (FINAL_FAILURE.has(raw)) {
     return {
