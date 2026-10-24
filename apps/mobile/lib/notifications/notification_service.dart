@@ -88,6 +88,9 @@ class NotificationService {
     try {
       final permission = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
       if (permission.authorizationStatus == AuthorizationStatus.denied) return;
+      // The server sends through Firebase Admin's registration-token API.
+      // Suppress this deprecation until FID registration is migrated end to end.
+      // ignore: deprecated_member_use
       final token = await FirebaseMessaging.instance.getToken();
       final platform = switch (defaultTargetPlatform) {
         TargetPlatform.android => 'android',
@@ -96,6 +99,7 @@ class NotificationService {
       };
       if (token == null || token.isEmpty || platform == null) return;
       await _registerToken(token, platform);
+      // ignore: deprecated_member_use
       _tokenRefreshSubscription ??= FirebaseMessaging.instance.onTokenRefresh.listen((nextToken) {
         unawaited(_registerToken(nextToken, platform));
       });
@@ -112,7 +116,10 @@ class NotificationService {
   Future<void> unregisterCurrentDevice() async {
     String? token = _registeredToken;
     if (token == null && Firebase.apps.isNotEmpty) {
-      try { token = await FirebaseMessaging.instance.getToken(); } catch (_) {}
+      try {
+        // ignore: deprecated_member_use
+        token = await FirebaseMessaging.instance.getToken();
+      } catch (_) {}
     }
     _registeredToken = null;
     await _tokenRefreshSubscription?.cancel();
