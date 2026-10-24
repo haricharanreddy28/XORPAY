@@ -77,10 +77,10 @@ app.use(
 // --- OTP authentication (Twilio Verify by default) -----------------------
 function normalizePhone(value) {
   if (typeof value !== "string") return null;
-  const phone = value.trim().replace(/[\\s().-]/g, "");
-  if (/^[6-9]\\d{9}$/.test(phone)) return `+91${phone}`;
-  if (/^91[6-9]\\d{9}$/.test(phone)) return `+${phone}`;
-  if (/^\\+[1-9]\\d{7,14}$/.test(phone)) return phone;
+  const phone = value.trim().replace(/[\s().-]/g, "");
+  if (/^[6-9]\d{9}$/.test(phone)) return `+91${phone}`;
+  if (/^91[6-9]\d{9}$/.test(phone)) return `+${phone}`;
+  if (/^\+[1-9]\d{7,14}$/.test(phone)) return phone;
   return null;
 }
 
@@ -133,7 +133,7 @@ app.post("/auth/otp/verify", async (req, res) => {
   const phone = normalizePhone(req.body?.phone);
   const otp = req.body?.otp;
   if (!phone) return res.status(400).json({ error: "invalid_phone" });
-  if (typeof otp !== "string" || !/^\\d{4,10}$/.test(otp)) {
+  if (typeof otp !== "string" || !/^\d{4,10}$/.test(otp)) {
     return res.status(400).json({ error: "invalid_otp" });
   }
 
