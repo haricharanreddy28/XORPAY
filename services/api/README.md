@@ -1,8 +1,7 @@
 # Xorpay test backend (Cashfree sandbox)
 
 Minimal Node/Express server so you can run a **real Cashfree checkout with test
-money** and phone verification through Twilio Verify. In-memory auth/payment state — **not
-production**.
+money** and phone verification through Twilio Verify. Refresh sessions use Redis when configured; transaction and business state remain in-memory — **not production**.
 
 ## 1. Get sandbox keys
 1. merchant.cashfree.com → Developers → API Keys → **Sandbox** → copy App ID + Secret Key.
@@ -46,7 +45,9 @@ flutter run \
 | Route | Purpose |
 |---|---|
 | `POST /auth/otp/request` | send an SMS through Twilio Verify |
-| `POST /auth/otp/verify` | verify the code through Twilio Verify; returns a test token |
+| `POST /auth/otp/verify` | verify the code; returns a signed 15-minute access JWT and rotating refresh token |
+| `POST /auth/session/refresh` | rotate a one-time refresh token (Redis in deployment) |
+| `POST /auth/session/logout` | revoke a refresh token
 | `POST /kyc/pan` | verify PAN (provider) |
 | `POST /kyc/gstin` | verify GSTIN → higher tier |
 | `POST /kyc/aadhaar/init` · `/aadhaar/complete` | DigiLocker/OKYC start + finish |
@@ -137,9 +138,38 @@ npm test   # node --test — runs the limits engine suite
 ```
 
 ## Before production (do not skip)
-- Replace the in-memory OTP rate limiter and base64 tokens with shared rate limiting and signed JWT/session auth with device binding.
-- Replace the in-memory `orders` Map with a database; add idempotency keys.
-- Register the webhook URL in the Cashfree dashboard and rely on it for "paid".
-- Move secret key to a secrets manager; never commit it.
-- Switch keys + `CASHFREE_ENV=PRODUCTION` only after business KYC is approved;
-  first live test with ₹1, then refund.
+- The API refuses to start with `NODE_ENV=production` or
+  `CASHFREE_ENV=PRODUCTION` until persistence, payouts, admin auth, and
+  reconciliation are completed.
+- Replace process-local business/payment state and OTP rate limiting with
+  PostgreSQL and Redis-backed controls.
+- Wire production Cashfree Payouts, KYC, invoice/GSP and notification providers.
+- Configure TLS, monitoring, audit trails, legal disclosures, and an allowlist
+  before the real-money pilot.
+- Store all credentials only in AWS Secrets Manager; rotate any credentials
+  that were pasted into chat or committed by mistake.
+
+## Pilot auth foundation
+- Access tokens are HMAC-SHA256 signed JWTs with a 15-minute lifetime. Set a
+  unique `JWT_SECRET` of at least 32 bytes in the secret manager.
+- Refresh tokens are random, stored only as SHA-256 hashes, expire after 30
+  days, and rotate atomically via Redis. Local non-production runs may use an
+  in-memory session store when `REDIS_URL` is unset.
+- The Flutter API client refreshes once on 401 and clears the local session if
+  refresh fails. Logout revokes the refresh token.
+- Business/payment records are still in-memory; this auth slice does not make
+  the API safe for live-money traffic. PostgreSQL persistence, durable payout
+  processing, individual admin identity/audit, and provider production wiring
+  remain release blockers.
+
+
+## Limited-pilot controls (proposed defaults)
+- Set `PILOT_MODE=true` only after the API has durable persistence and an
+  approved production payment path. An empty allowlist denies all OTP requests.
+- Store `PILOT_ALLOWLIST_PHONES` as E.164 phone numbers in AWS Secrets Manager.
+  The default maximum is 10 users; default allowed categories are vendor/rent.
+- Default per-user caps are ₹5,000 per transaction, ₹10,000 per day, and
+  ₹50,000 per month. Override only after your risk owner approves the amounts.
+- Order creation resolves beneficiary verification server-side; it ignores any
+  client-provided verified flag. Only the signed Cashfree webhook can trigger
+  ledger settlement and payout; `/payments/confirm` only reports provider status.
