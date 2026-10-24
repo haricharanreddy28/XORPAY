@@ -18,7 +18,8 @@ environment/process steps; **[wire]** are integration points left stubbed.
   `FLAG_SECURE`), Play Integrity API, code obfuscation
   (`flutter build apk --obfuscate --split-debug-info=…`).
 
-## Backend hardening (spec §6)\n- **[code]** Live Cashfree mode currently fails closed at startup because business data, payouts, admin identity, and reconciliation are not production-ready.
+## Backend hardening (spec §6)
+- **[code]** Live Cashfree mode currently fails closed at startup because business data, payouts, admin identity, and reconciliation are not production-ready.
 - **[code]** Limits enforced server-side before order creation.
 - **[code]** Double-entry ledger; payout settlement is idempotent.
 - **[code]** Maker-checker for refunds (different approver required).
