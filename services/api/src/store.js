@@ -15,6 +15,9 @@ const beneficiaries = new Map();
 /** txn_id -> transaction record */
 const transactions = new Map();
 
+/** phone -> [ invoice ] */
+const invoices = new Map();
+
 const newId = (prefix) =>
   `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
@@ -98,6 +101,37 @@ export function listTransactions(phone) {
   return [...transactions.values()]
     .filter((t) => t.phone === phone)
     .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+// --- invoices (GST Hub) --------------------------------------------------
+export function listInvoices(phone, status) {
+  const all = invoices.get(phone) ?? [];
+  return status ? all.filter((i) => i.status === status) : all;
+}
+export function addInvoices(phone, list) {
+  const existing = invoices.get(phone) ?? [];
+  // De-dupe by supplier GSTIN + invoice number.
+  const seen = new Set(existing.map((i) => `${i.supplierGstin}|${i.invoiceNo}`));
+  const added = [];
+  for (const inv of list) {
+    const key = `${inv.supplierGstin}|${inv.invoiceNo}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    added.push({ id: newId("inv"), status: "unpaid", paidTxnId: null, ...inv });
+  }
+  invoices.set(phone, [...existing, ...added]);
+  return added;
+}
+export function getInvoicesByIds(phone, ids) {
+  const set = new Set(ids);
+  return listInvoices(phone).filter((i) => set.has(i.id));
+}
+export function markInvoicesPaid(phone, ids, txnId = null) {
+  const set = new Set(ids);
+  const next = listInvoices(phone).map((i) =>
+    set.has(i.id) ? { ...i, status: "paid", paidTxnId: txnId } : i,
+  );
+  invoices.set(phone, next);
 }
 
 // --- shared double-entry ledger -----------------------------------------

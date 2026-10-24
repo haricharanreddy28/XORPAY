@@ -18,6 +18,7 @@ import { limitsRoutes } from "./src/limits/limitsRoutes.js";
 import { cardRoutes } from "./src/cards/cardRoutes.js";
 import { beneficiaryRoutes } from "./src/beneficiaries/beneficiaryRoutes.js";
 import { transactionRoutes } from "./src/payments/transactionRoutes.js";
+import { invoiceRoutes } from "./src/invoices/invoiceRoutes.js";
 import { computeFee } from "./src/payments/fee.js";
 import { TxnState, canTransition } from "./src/payments/stateMachine.js";
 import {
@@ -89,6 +90,9 @@ app.use("/beneficiaries", beneficiaryRoutes());
 
 // --- transactions --------------------------------------------------------
 app.use("/transactions", transactionRoutes());
+
+// --- invoices (GST Hub) --------------------------------------------------
+app.use("/invoices", invoiceRoutes());
 
 // --- payments ------------------------------------------------------------
 function requireCashfree(_req, res, next) {

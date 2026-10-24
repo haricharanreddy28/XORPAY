@@ -55,6 +55,9 @@ flutter run \
 | `POST /payments/orders` | limits check → fee → Cashfree order (charges youPay) |
 | `POST /payments/confirm` | reads real status; settles ledger + state on PAID |
 | `GET /transactions` · `GET /transactions/:id` | history + detail (with ledger) |
+| `POST /invoices/import` | pull purchase invoices from GSTR-2A/2B |
+| `GET /invoices` · `GET /invoices/suppliers` | list / unpaid totals by supplier |
+| `POST /invoices/quote` · `POST /invoices/mark-paid` | TDS-aware payable; settle |
 | `POST /webhooks/cashfree` | Cashfree's authoritative callback (set as notify URL) |
 | `GET /health` | liveness (`payments` flag shows if Cashfree is configured) |
 
@@ -98,6 +101,15 @@ flutter run \
   (REFUND_INITIATED → REFUNDED, reversing the ledger). In-process for dev;
   BullMQ/Redis with a dead-letter queue comes with the NestJS migration.
 - Next slice: the app's vendor/rent flows + receipts.
+
+## GST Hub / invoices (Phase 5)
+- Swappable GSTR importer (`src/invoices/importProvider.js`): a **stub** returns
+  sample purchase invoices; set `GSP_PROVIDER=gsp` + `GSP_BASE_URL`/`GSP_API_KEY`
+  for a real GSP (endpoints marked TODO; real flow authenticates the GSTIN).
+- **TDS math** (`src/invoices/tds.js`) is pure and unit-tested: per-invoice
+  deduction for "pay with TDS" vs full payment.
+- Flow: import → `/invoices/suppliers` (unpaid totals) → select invoices →
+  `/invoices/quote` (gross/TDS/net) → pay via `/payments/orders` → `/invoices/mark-paid`.
 
 ## Test
 ```bash
