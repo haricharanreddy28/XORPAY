@@ -49,11 +49,6 @@ dependencies:
   pdf: ^3.11.1
   printing: ^5.13.3
 
-  # Crash reporting (optional; mirrors Pice's sentry_flutter)
-  sentry_flutter: ^8.9.0
-
-  # Root/jailbreak + tamper detection (recommended for fintech)
-  freerasp: ^6.6.0
 
 dev_dependencies:
   flutter_test:
