@@ -1,9 +1,9 @@
 function normalizePhone(value) {
   if (typeof value !== "string") return null;
-  const phone = value.trim().replace(/[\\s().-]/g, "");
-  if (/^[6-9]\\d{9}$/.test(phone)) return `+91${phone}`;
-  if (/^91[6-9]\\d{9}$/.test(phone)) return `+${phone}`;
-  if (/^\\+[1-9]\\d{7,14}$/.test(phone)) return phone;
+  const phone = value.trim().replace(/[\s().-]/g, "");
+  if (/^[6-9]\d{9}$/.test(phone)) return \`+91\${phone}\`;
+  if (/^91[6-9]\d{9}$/.test(phone)) return \`+\${phone}\`;
+  if (/^\+[1-9]\d{7,14}$/.test(phone)) return phone;
   return null;
 }
 
@@ -33,6 +33,10 @@ export const pilotCaps = Object.freeze({
   monthly: capFromEnv("PILOT_MAX_MONTHLY_MINOR", 5_000_000),
   maxUsers: capFromEnv("PILOT_MAX_USERS", 10),
 });
+
+if (pilotMode && pilotAllowedPhones.size > pilotCaps.maxUsers) {
+  throw new Error("PILOT_ALLOWLIST_PHONES exceeds PILOT_MAX_USERS");
+}
 
 export function pilotAccessAllowed(phone) {
   return !pilotMode || pilotAllowedPhones.has(phone);
