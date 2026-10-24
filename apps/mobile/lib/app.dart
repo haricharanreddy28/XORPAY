@@ -4,6 +4,7 @@ import 'package:xorpay_ui/xorpay_ui.dart';
 
 import 'auth/biometric_lock.dart';
 import 'auth/session.dart';
+import 'core/inactivity.dart';
 import 'core/secure_storage.dart';
 import 'kyc/kyc_flow.dart';
 import 'onboarding/intro_carousel.dart';
@@ -40,6 +41,7 @@ class _AppFlowState extends State<_AppFlow> {
   bool _splashDone = false;
   bool _introSeen = true; // assume true until we learn otherwise (avoids flash)
   bool _kycDone = true;
+  int _lockEpoch = 0; // bump to force a re-lock (inactivity timeout)
 
   @override
   void initState() {
@@ -70,7 +72,14 @@ class _AppFlowState extends State<_AppFlow> {
               },
             );
           }
-          return const BiometricLock(child: HomeScreen());
+          // Gate behind biometrics, and re-lock after inactivity.
+          return BiometricLock(
+            key: ValueKey(_lockEpoch),
+            child: InactivityDetector(
+              onTimeout: () => setState(() => _lockEpoch++),
+              child: const HomeScreen(),
+            ),
+          );
         }
         if (!_introSeen) {
           return IntroCarousel(

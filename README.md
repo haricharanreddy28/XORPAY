@@ -30,15 +30,19 @@ docs/            Backend API spec, deploy guide
 | Platform fee | 2% + 18% GST on the fee |
 
 ## Build order (master plan, phase by phase)
-1. **Foundation** — design system, auth/OTP, onboarding, backend skeleton, CI ← *in progress*
-2. KYC + business profile + limits
-3. Cards + beneficiaries
-4. Payments core (fee engine, PA, webhooks, payouts, ledger, receipts) — NestJS API
-5. More categories (GST, education, taxes, BBPS card bills, invoices)
-6. Rewards, referrals, notifications
-7. Admin panel + reconciliation + reports
-8. Support, disputes, statements, settings
-9. Hardening, tests, deploy
+1. ✅ Foundation — design system, auth/OTP, onboarding, KYC stepper, CI
+2. ✅ KYC + business profile + limits
+3. ✅ Cards + beneficiaries
+4. ✅ Payments core (fee engine, PA, webhooks, payouts, ledger, receipts)
+5. ✅ More categories (GST, education, taxes, card bills, invoices/GST Hub)
+6. ✅ Rewards, referrals, notifications
+7. ✅ Admin panel + reconciliation + reports + RBAC/maker-checker
+8. ✅ Support, disputes, statements, settings, delete-account
+9. ✅ Hardening (session lock, security checklist) — see [docs/SECURITY.md](docs/SECURITY.md)
+
+> "✅" means code-complete and CI-green. Production launch still needs the
+> external rails live + RBI/PA onboarding, Postgres/Redis, and device/load
+> testing — see the release checklist in [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Each part's README
 - Mobile app: [apps/mobile/README.md](apps/mobile/README.md)
