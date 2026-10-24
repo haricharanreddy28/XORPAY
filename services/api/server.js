@@ -13,7 +13,7 @@ import crypto from "node:crypto";
 
 import { createSession, rotateSession, revokeSession, connectAuthStore, requireAuth } from "./src/auth.js";
 import { sendVerification, checkVerification } from "./src/auth/twilioVerify.js";
-import { orders, getKyc, getSpend } from "./src/store.js";
+import { orders, getKyc, getSpend as getMemorySpend } from "./src/store.js";
 import { kycRoutes } from "./src/kyc/kycRoutes.js";
 import { limitsRoutes } from "./src/limits/limitsRoutes.js";
 import { cardRoutes } from "./src/cards/cardRoutes.js";
@@ -39,6 +39,16 @@ import { enqueuePayout } from "./src/payouts/payoutQueue.js";
 import { tierForKyc, evaluate } from "./src/limits/limitsEngine.js";
 import { normalizePhone, pilotMode, pilotAllowedPhones, pilotCaps, pilotAccessAllowed, pilotCategoryAllowed } from "./src/config/pilot.js";
 import { getBeneficiary } from "./src/store.js";
+import { databaseConfigured, connectDatabase } from "./src/db/database.js";
+import {
+  createPayment as persistPayment,
+  setPaymentSession,
+  failPaymentBeforeCollection,
+  getPayment as getPersistentPayment,
+  getPaymentSpend,
+  settleCashfreePayment,
+  sha256Hex,
+} from "./src/payments/paymentRepository.js";
 
 const {
   CASHFREE_APP_ID,
@@ -220,7 +230,9 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
 
   // Server-side limits enforcement (never trust client-supplied KYC or payee status).
   const kyc = getKyc(req.phone);
-  const { spentTodayMinor, spentMonthMinor } = getSpend(req.phone);
+  const { spentTodayMinor, spentMonthMinor } = databaseConfigured()
+    ? await getPaymentSpend(req.phone)
+    : getMemorySpend(req.phone);
   const decision = evaluate({
     tier: tierForKyc(kyc),
     amountMinor: amount,
@@ -240,6 +252,9 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
   const orderAmount = fee.youPayMinor / 100; // charge the total, in rupees
 
   try {
+    if (databaseConfigured()) {
+      await persistPayment({ id: orderId, phone: req.phone, beneficiaryId, category, currency, fee });
+    }
     const r = await fetch(`${CF_BASE}/orders`, {
       method: "POST",
       headers: cfHeaders,
@@ -256,8 +271,12 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
     });
     const data = await r.json();
     if (!r.ok || !data.payment_session_id) {
+      if (databaseConfigured()) await failPaymentBeforeCollection(orderId, "provider_order_rejected");
       console.error("[cashfree create] failed", r.status);
       return res.status(502).json({ error: "psp_unavailable" });
+    }
+    if (databaseConfigured() && !(await setPaymentSession(orderId, data.payment_session_id))) {
+      return res.status(503).json({ error: "payment_persistence_unavailable" });
     }
     orders.set(orderId, { amountMinor: amount, phone: req.phone, status: "CREATED", beneficiaryId });
     createTransaction({
@@ -275,7 +294,10 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
       fee, // so the client can show the exact server-side breakdown
     });
   } catch (e) {
-    console.error("[cashfree create] threw", e);
+    if (databaseConfigured()) {
+      try { await failPaymentBeforeCollection(orderId, "provider_unavailable"); } catch {}
+    }
+    console.error("[cashfree create] threw", e?.code || "unknown");
     res.status(502).json({ error: "psp_unavailable" });
   }
 });
@@ -311,7 +333,9 @@ function markPaid(orderId) {
 // 2) Confirm: ask Cashfree for the real status (never trust the client).
 app.post("/payments/confirm", requireAuth, requireCashfree, async (req, res) => {
   const { order_id } = req.body || {};
-  const record = order_id && orders.get(order_id);
+  const record = order_id
+    ? (databaseConfigured() ? await getPersistentPayment(order_id) : orders.get(order_id))
+    : null;
   if (!record) return res.status(404).json({ error: "unknown_order" });
   if (record.phone !== req.phone) return res.status(403).json({ error: "not_owner" });
 
@@ -325,7 +349,7 @@ app.post("/payments/confirm", requireAuth, requireCashfree, async (req, res) => 
     record.status = status;
     // The client may observe provider status, but only the signature-verified
     // webhook is allowed to post the ledger or enqueue the payout.
-    res.json({ order_id, status, amount: record.amountMinor });
+    res.json({ order_id, status, amount: record.amountMinor ?? record.fee?.payeeMinor });
   } catch (e) {
     console.error("[cashfree get] threw", e);
     res.status(502).json({ error: "psp_unavailable" });
@@ -333,7 +357,7 @@ app.post("/payments/confirm", requireAuth, requireCashfree, async (req, res) => 
 });
 
 // 3) Webhook: Cashfree's authoritative paid/failed signal.
-app.post("/webhooks/cashfree", (req, res) => {
+app.post("/webhooks/cashfree", async (req, res) => {
   const signature = req.headers["x-webhook-signature"];
   const timestamp = req.headers["x-webhook-timestamp"];
   const expected = crypto
@@ -349,7 +373,31 @@ app.post("/webhooks/cashfree", (req, res) => {
   }
 
   const orderId = req.body?.data?.order?.order_id;
-  const orderStatus = req.body?.data?.order?.order_status || req.body?.type;
+  const eventType = String(req.body?.type || "unknown");
+  const paymentStatus = String(req.body?.data?.payment?.payment_status || req.body?.data?.order?.order_status || "").toUpperCase();
+  const orderStatus = paymentStatus || eventType;
+  if (databaseConfigured() && orderId) {
+    try {
+      const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
+      const isPaid = paymentStatus === "PAID" || paymentStatus === "SUCCESS" || eventType.includes("PAYMENT_SUCCESS");
+      const paymentId = req.body?.data?.payment?.cf_payment_id || "";
+      const eventKey = sha256Hex([eventType, orderId, paymentId, paymentStatus, sha256Hex(raw)].join("|"));
+      const settled = await settleCashfreePayment({
+        orderId,
+        eventKey,
+        eventType,
+        payloadSha256: sha256Hex(raw),
+        isPaid,
+      });
+      if (settled.unknownOrder) console.warn("[webhook] unknown order persisted for review");
+      const memoryTxn = getTransaction(orderId);
+      if (memoryTxn && settled.payment?.state === TxnState.PAYOUT_QUEUED) memoryTxn.state = TxnState.PAYOUT_QUEUED;
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error("[webhook] persistence failed", error?.code || "unknown");
+      return res.status(503).json({ error: "webhook_persistence_unavailable" });
+    }
+  }
   if (orderId && orders.has(orderId)) {
     orders.get(orderId).status = orderStatus; // idempotent: last write wins
     console.log(`[webhook] ${orderId} -> ${orderStatus}`);
@@ -388,6 +436,7 @@ app.post("/auth/session/logout", async (req, res) => {
 
 async function startServer() {
   await connectAuthStore();
+  if (databaseConfigured()) await connectDatabase();
   app.listen(PORT, () => {
     console.log(`xorpay api on :${PORT} (Cashfree ${CASHFREE_ENV})`);
     console.log(`payments: ${cashfreeConfigured ? "enabled" : "disabled (no keys)"}`);
