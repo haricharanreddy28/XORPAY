@@ -45,9 +45,9 @@ const {
   PORT = 8080,
 } = process.env;
 
-if (CASHFREE_ENV.toUpperCase() === "PRODUCTION") {
+if (process.env.NODE_ENV === "production" || CASHFREE_ENV.toUpperCase() === "PRODUCTION") {
   throw new Error(
-    "Live Cashfree payments are disabled until PostgreSQL persistence, durable payouts, " +
+    "Production mode is disabled until PostgreSQL persistence, durable payouts, " +
       "production admin authentication, and payment reconciliation are wired.",
   );
 }
