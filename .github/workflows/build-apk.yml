@@ -40,14 +40,15 @@ jobs:
 
       - run: flutter pub get
 
-      # Debug APK is signed with the debug key, so it installs for testing.
+      # Release, arm64 only — small APK, signed with the debug key (installs for
+      # testing). Points at the deployed test backend.
       - run: >-
-          flutter build apk --debug
-          --dart-define=API_BASE_URL=https://api.example.com
+          flutter build apk --release --target-platform android-arm64
+          --dart-define=API_BASE_URL=https://xorpay.onrender.com
           --dart-define=CASHFREE_ENV=SANDBOX
 
       - uses: actions/upload-artifact@v4
         with:
           name: xorpay-apk
-          path: apps/mobile/build/app/outputs/flutter-apk/app-debug.apk
+          path: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
