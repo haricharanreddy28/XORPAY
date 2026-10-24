@@ -109,8 +109,7 @@ class PaymentService {
           .build();
 
       // ignore: deprecated_member_use
-      final payment =
-          CFDropCheckoutPaymentBuilder().setSession(session).build();
+      final payment = CFDropCheckoutPaymentBuilder().setSession(session).build();
 
       // Opens the checkout UI; result arrives via _onVerify / _onError.
       _gateway.doPayment(payment);
