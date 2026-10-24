@@ -45,7 +45,8 @@ export class CashfreePayoutProvider {
     if (!clientId || !clientSecret) throw new Error("Cashfree Payouts credentials are required");
     this.clientId = clientId;
     this.clientSecret = clientSecret;
-    this.baseUrl = String(baseUrl);\n    while (this.baseUrl.endsWith("/")) this.baseUrl = this.baseUrl.slice(0, -1);
+    this.baseUrl = String(baseUrl);
+    while (this.baseUrl.endsWith("/")) this.baseUrl = this.baseUrl.slice(0, -1);
     this.fetch = fetchImpl;
     this.apiVersion = apiVersion;
   }
