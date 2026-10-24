@@ -105,12 +105,14 @@ flutter run \
   REFUND_INITIATED → REFUNDED. Illegal transitions throw.
 - Settlement is **idempotent**: `markPaid` posts the ledger + advances state
   once, driven by the confirm endpoint and (authoritatively) the webhook.
-- **Payout queue** (`src/payouts/`): on PAID the transaction is enqueued; the
-  PayoutProcessor runs PAYOUT_QUEUED → PAYOUT_PROCESSING → SUCCESS via a
-  swappable payout provider (stub / Cashfree Payouts skeleton), retries
-  transient failures, and on a permanent failure **auto-refunds to source**
-  (REFUND_INITIATED → REFUNDED, reversing the ledger). In-process for dev;
-  BullMQ/Redis with a dead-letter queue comes with the NestJS migration.
+- **Payout adapter** (`src/payouts/payoutProvider.js`): Cashfree Payouts v2
+  uses its separate client ID/secret, `/transfers`, and API version `2024-01-01`.
+  Configure `PAYOUT_PROVIDER=cashfree` and the separate `CASHFREE_PAYOUT_*`
+  values from Secrets Manager. Local development defaults to the fake provider.
+  Pending or ambiguous outcomes remain `PAYOUT_PROCESSING`; they are never
+  blindly resubmitted or refunded. `reconcileOne` queries the original transfer
+  ID. The scheduler and state are still in-process, so durable retries,
+  reconciliation jobs and auto-refund execution remain production blockers.
 - Next slice: the app's vendor/rent flows + receipts.
 
 ## GST Hub / invoices (Phase 5)
@@ -143,7 +145,10 @@ npm test   # node --test — runs the limits engine suite
   reconciliation are completed.
 - Replace process-local business/payment state and OTP rate limiting with
   PostgreSQL and Redis-backed controls.
-- Wire production Cashfree Payouts, KYC, invoice/GSP and notification providers.
+- Run the Cashfree Payouts adapter against your sandbox account, validate
+  beneficiary-field mapping and final-status semantics, then enable production
+  credentials only after the account's approved workflow is confirmed.
+- Wire production KYC, invoice/GSP and notification providers.
 - Configure TLS, monitoring, audit trails, legal disclosures, and an allowlist
   before the real-money pilot.
 - Store all credentials only in AWS Secrets Manager; rotate any credentials
@@ -157,10 +162,10 @@ npm test   # node --test — runs the limits engine suite
   in-memory session store when `REDIS_URL` is unset.
 - The Flutter API client refreshes once on 401 and clears the local session if
   refresh fails. Logout revokes the refresh token.
-- Business/payment records are still in-memory; this auth slice does not make
-  the API safe for live-money traffic. PostgreSQL persistence, durable payout
-  processing, individual admin identity/audit, and provider production wiring
-  remain release blockers.
+- Business/payment records and payout jobs are still in-memory; this API is not
+  safe for live-money traffic. PostgreSQL persistence, durable payout
+  processing/reconciliation, individual admin identity/audit, and sandbox
+  verification of provider mappings remain release blockers.
 
 
 ## Limited-pilot controls (proposed defaults)
