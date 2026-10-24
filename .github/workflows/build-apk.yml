@@ -29,11 +29,11 @@ jobs:
       # Generate the android/ project (not committed in this starter).
       - run: flutter create .
 
-      # Raise minSdk/compileSdk (ML Kit / camera / AndroidX) and add permissions.
+      # Plugin metadata currently requires compileSdk 36.
       - name: Patch SDK versions + permissions
         run: |
           grep -rl 'flutter.minSdkVersion' android/app | xargs sed -i 's/flutter.minSdkVersion/23/g' || true
-          grep -rl 'flutter.compileSdkVersion' android/app | xargs sed -i 's/flutter.compileSdkVersion/35/g' || true
+          grep -rl 'flutter.compileSdkVersion' android/app | xargs sed -i 's/flutter.compileSdkVersion/36/g' || true
           grep -rl 'flutter.targetSdkVersion' android/app | xargs sed -i 's/flutter.targetSdkVersion/34/g' || true
           MF=android/app/src/main/AndroidManifest.xml
           sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.NFC"/>\n    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>\n    <application#' "$MF"
