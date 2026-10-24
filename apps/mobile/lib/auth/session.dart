@@ -36,6 +36,17 @@ class Session extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    final refreshToken = await SecureStore.instance.refreshToken;
+    if (refreshToken != null) {
+      try {
+        await ApiClient.instance.dio.post(
+          '/auth/session/logout',
+          data: {'refresh_token': refreshToken},
+        );
+      } catch (_) {
+        // Local logout still succeeds if the API is offline.
+      }
+    }
     await SecureStore.instance.clear();
     _authenticated = false;
     notifyListeners();
