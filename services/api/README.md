@@ -13,8 +13,8 @@ production**.
 cd services/api
 npm install
 # Set these in your shell or a local .env loader; never commit real credentials.
-CASHFREE_APP_ID=xxx CASHFREE_SECRET_KEY=yyy \\
-TWILIO_ACCOUNT_SID=AC... TWILIO_AUTH_TOKEN=... \\
+CASHFREE_APP_ID=xxx CASHFREE_SECRET_KEY=yyy \
+TWILIO_ACCOUNT_SID=AC... TWILIO_AUTH_TOKEN=... \
 TWILIO_VERIFY_SERVICE_SID=VA... node server.js
 ```
 Sanity check: `curl http://localhost:8080/health` → `{"ok":true,"env":"SANDBOX"}`
