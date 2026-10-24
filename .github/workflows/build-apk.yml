@@ -37,6 +37,9 @@ jobs:
           grep -rl 'flutter.targetSdkVersion' android/app | xargs sed -i 's/flutter.targetSdkVersion/34/g' || true
           MF=android/app/src/main/AndroidManifest.xml
           sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.NFC"/>\n    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>\n    <application#' "$MF"
+          # local_auth (biometrics) requires the activity to be a FlutterFragmentActivity.
+          MA=$(find android/app/src/main -name 'MainActivity.kt' -o -name 'MainActivity.java' | head -1)
+          [ -n "$MA" ] && sed -i 's/FlutterActivity/FlutterFragmentActivity/g' "$MA" && echo "patched $MA"
 
       - run: flutter pub get
 
