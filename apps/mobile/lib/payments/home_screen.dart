@@ -8,6 +8,10 @@ import '../business/business_profile_screen.dart';
 import '../cards/cards_screen.dart';
 import '../invoices/gst_hub_screen.dart';
 import '../limits/limits_service.dart';
+import '../notifications/notification_service.dart';
+import '../notifications/notifications_screen.dart';
+import '../rewards/rewards_screen.dart';
+import '../rewards/rewards_service.dart';
 import 'biller_pay_screens.dart';
 import 'card_bill_pay_screen.dart';
 import 'rent_pay_screen.dart';
@@ -26,15 +30,26 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   Future<Limits>? _limits;
+  Future<Rewards>? _rewards;
+  Future<NotificationFeed>? _feed;
 
   @override
   void initState() {
     super.initState();
     _limits = LimitsService.instance.fetch();
+    _rewards = RewardsService.instance.getRewards();
+    _feed = NotificationService.instance.list();
   }
 
   void _refreshLimits() {
     setState(() => _limits = LimitsService.instance.fetch());
+  }
+
+  void _refreshHeader() {
+    setState(() {
+      _rewards = RewardsService.instance.getRewards();
+      _feed = NotificationService.instance.list();
+    });
   }
 
   Future<void> _openBusinessProfile() async {
@@ -104,6 +119,24 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('XORPAY'),
         actions: [
+          _CoinsChip(
+            future: _rewards,
+            onTap: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const RewardsScreen()),
+              );
+              _refreshHeader();
+            },
+          ),
+          _NotificationsBell(
+            future: _feed,
+            onTap: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+              );
+              _refreshHeader();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => context.read<Session>().logout(),
@@ -182,6 +215,80 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Coins balance chip in the app bar.
+class _CoinsChip extends StatelessWidget {
+  const _CoinsChip({required this.future, required this.onTap});
+  final Future<Rewards>? future;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final xc = context.xc;
+    return FutureBuilder<Rewards>(
+      future: future,
+      builder: (context, snap) {
+        final coins = snap.data?.balance ?? 0;
+        return InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(XRadius.pill),
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: xc.rewardGold),
+              borderRadius: BorderRadius.circular(XRadius.pill),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.monetization_on, size: 16, color: Color(0xFF14121F)),
+                const SizedBox(width: 4),
+                Text('$coins',
+                    style: XType.caption.copyWith(
+                        color: const Color(0xFF14121F), fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Notifications bell with an unread dot.
+class _NotificationsBell extends StatelessWidget {
+  const _NotificationsBell({required this.future, required this.onTap});
+  final Future<NotificationFeed>? future;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final xc = context.xc;
+    return FutureBuilder<NotificationFeed>(
+      future: future,
+      builder: (context, snap) {
+        final unread = snap.data?.unread ?? 0;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            IconButton(icon: const Icon(Icons.notifications_none), onPressed: onTap),
+            if (unread > 0)
+              Positioned(
+                right: 10,
+                top: 10,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(color: xc.error, shape: BoxShape.circle),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
