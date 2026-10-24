@@ -8,16 +8,13 @@ import 'config.dart';
 import 'secure_storage.dart';
 
 /// Single configured Dio instance for talking to YOUR backend.
-///
-/// Features:
-///  - Auth interceptor: attaches the current access token.
-///  - TLS public-key pinning (when [AppConfig.certPinsSha256] is set).
-///  - Basic 401 handling hook (wire up your refresh/logout here).
+/// Handles bearer auth, one-time refresh on 401, and optional TLS pinning.
 class ApiClient {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
 
   late final Dio dio = _build();
+  Future<String?>? _refreshInFlight;
 
   Dio _build() {
     final d = Dio(
@@ -39,11 +36,28 @@ class ApiClient {
           handler.next(options);
         },
         onError: (e, handler) async {
-          if (e.response?.statusCode == 401) {
-            // TODO: attempt token refresh, else force logout.
-            await SecureStore.instance.clear();
+          final path = e.requestOptions.path;
+          final isAuthRequest = path.startsWith('/auth/');
+          if (e.response?.statusCode != 401 || isAuthRequest) {
+            handler.next(e);
+            return;
           }
-          handler.next(e);
+
+          final accessToken = await _refreshAccessToken();
+          if (accessToken == null) {
+            await SecureStore.instance.clear();
+            handler.next(e);
+            return;
+          }
+
+          try {
+            final options = e.requestOptions
+              ..headers['Authorization'] = 'Bearer $accessToken';
+            handler.resolve(await d.fetch(options));
+          } catch (_) {
+            await SecureStore.instance.clear();
+            handler.next(e);
+          }
         },
       ),
     );
@@ -55,15 +69,41 @@ class ApiClient {
     return d;
   }
 
-  /// Reject any TLS connection whose leaf cert public key isn't one of our pins.
+  Future<String?> _refreshAccessToken() {
+    return _refreshInFlight ??= _performRefresh().whenComplete(() {
+      _refreshInFlight = null;
+    });
+  }
+
+  Future<String?> _performRefresh() async {
+    final refreshToken = await SecureStore.instance.refreshToken;
+    if (refreshToken == null) return null;
+    try {
+      final response = await dio.post(
+        '/auth/session/refresh',
+        data: {'refresh_token': refreshToken},
+      );
+      final access = response.data['access_token'] as String?;
+      final refresh = response.data['refresh_token'] as String?;
+      if (access == null || refresh == null) return null;
+      await SecureStore.instance.saveTokens(
+        accessToken: access,
+        refreshToken: refresh,
+      );
+      return access;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Reject TLS connections unless the leaf certificate digest matches a pin.
   void _applyPinning(Dio d) {
     final adapter = d.httpClientAdapter as IOHttpClientAdapter;
     adapter.createHttpClient = () {
       final client = HttpClient();
       client.badCertificateCallback = (X509Certificate cert, String host, int port) {
         final pin = base64.encode(sha256.convert(cert.der).bytes);
-        // Note: pin the public key (SPKI) in production for rotation safety;
-        // this cert-DER pin is a simple starting point.
+        // Replace with an SPKI pin and a backup pin before a production release.
         return AppConfig.certPinsSha256.contains(pin);
       };
       return client;
