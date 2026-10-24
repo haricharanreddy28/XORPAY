@@ -11,7 +11,7 @@
 import express from "express";
 import crypto from "node:crypto";
 
-import { makeToken, requireAuth } from "./src/auth.js";
+import { createSession, rotateSession, revokeSession, connectAuthStore, requireAuth } from "./src/auth.js";
 import { sendVerification, checkVerification } from "./src/auth/twilioVerify.js";
 import { orders, getKyc, getSpend } from "./src/store.js";
 import { kycRoutes } from "./src/kyc/kycRoutes.js";
@@ -147,7 +147,7 @@ app.post("/auth/otp/verify", async (req, res) => {
       return res.status(503).json({ error: "otp_provider_not_supported" });
     }
     if (!approved) return res.status(401).json({ error: "bad_otp" });
-    res.json({ access_token: makeToken(phone), refresh_token: null });
+    res.json(await createSession(phone));
   } catch (error) {
     const status = error?.status === 503 ? 503 : 502;
     console.error("[otp] verification check failed", status);
@@ -345,7 +345,37 @@ app.get("/health", (_req, res) =>
   res.json({ ok: true, env: CASHFREE_ENV, payments: cashfreeConfigured })
 );
 
-app.listen(PORT, () => {
-  console.log(`xorpay api on :${PORT} (Cashfree ${CASHFREE_ENV})`);
-  console.log(`payments: ${cashfreeConfigured ? "enabled" : "disabled (no keys)"}`);
+app.post("/auth/session/refresh", async (req, res) => {
+  try {
+    const session = await rotateSession(req.body?.refresh_token);
+    if (!session) return res.status(401).json({ error: "invalid_refresh_token" });
+    res.json(session);
+  } catch (error) {
+    console.error("[auth] refresh failed", error?.code || "unknown");
+    res.status(503).json({ error: "session_store_unavailable" });
+  }
+});
+
+app.post("/auth/session/logout", async (req, res) => {
+  try {
+    await revokeSession(req.body?.refresh_token);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("[auth] logout failed", error?.code || "unknown");
+    res.status(503).json({ error: "session_store_unavailable" });
+  }
+});
+
+async function startServer() {
+  await connectAuthStore();
+  app.listen(PORT, () => {
+    console.log(`xorpay api on :${PORT} (Cashfree ${CASHFREE_ENV})`);
+    console.log(`payments: ${cashfreeConfigured ? "enabled" : "disabled (no keys)"}`);
+    console.log(`auth session store: ${process.env.REDIS_URL ? "Redis" : "in-memory development only"}`);
+  });
+}
+
+startServer().catch((error) => {
+  console.error("[startup] failed", error?.message || "unknown");
+  process.exitCode = 1;
 });
