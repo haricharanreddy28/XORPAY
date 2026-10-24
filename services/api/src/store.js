@@ -165,8 +165,10 @@ export function allKyc() {
  */
 export function getSpend(phone) {
   const paidStates = new Set(["PAID", "PAYOUT_QUEUED", "PAYOUT_PROCESSING", "SUCCESS"]);
-  const dayKey = (timestamp) =>
-    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(timestamp);
+  const dayKey = (timestamp) => {
+    const date = new Date(new Date(timestamp).getTime() + 330 * 60 * 1000);
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+  };
   const monthKey = (timestamp) => dayKey(timestamp).slice(0, 7);
   const today = dayKey(Date.now());
   const month = today.slice(0, 7);
