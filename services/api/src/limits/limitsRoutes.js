@@ -2,7 +2,8 @@ import { Router } from "express";
 
 import { requireAuth } from "../auth.js";
 import { getKyc, getSpend } from "../store.js";
-import { tierForKyc, evaluate, TIER_LIMITS } from "./limitsEngine.js";
+import { tierForKyc, evaluate, limitsFor } from "./limitsEngine.js";
+import { pilotMode, pilotCaps } from "../config/pilot.js";
 
 // Limits routes (spec §3.4). The app reads limits to show caps and an
 // "increase limit" prompt; the engine is also enforced server-side at payment.
@@ -15,7 +16,7 @@ export function limitsRoutes() {
     const kyc = getKyc(req.phone);
     const tier = tierForKyc(kyc);
     const { spentTodayMinor, spentMonthMinor } = getSpend(req.phone);
-    const limits = TIER_LIMITS[tier];
+    const limits = limitsFor(tier, pilotMode ? pilotCaps : null);
     res.json({
       tier,
       perTxnMinor: limits.perTxn,
@@ -38,6 +39,7 @@ export function limitsRoutes() {
       spentTodayMinor,
       spentMonthMinor,
       beneficiaryVerified,
+      caps: pilotMode ? pilotCaps : null,
     });
     res.json(result);
   });
