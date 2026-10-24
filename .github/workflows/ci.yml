@@ -45,6 +45,23 @@ jobs:
   backend:
     name: API check
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: xorpay
+          POSTGRES_PASSWORD: xorpay
+          POSTGRES_DB: xorpay
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U xorpay -d xorpay"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://xorpay:xorpay@localhost:5432/xorpay
+      DATABASE_SSL: "false"
     defaults:
       run:
         working-directory: services/api
@@ -56,9 +73,8 @@ jobs:
           node-version: "20"
 
       - run: npm install
-      # Syntax-check the server without starting it (no keys needed).
+      - run: npm run migrate
       - run: node --check server.js
-      # Unit tests (limits engine etc.) — pure modules, no keys needed.
       - run: npm test
 
   admin:
