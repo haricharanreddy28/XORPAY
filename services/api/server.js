@@ -38,7 +38,8 @@ import {
 import { enqueuePayout } from "./src/payouts/payoutQueue.js";
 import { tierForKyc, evaluate } from "./src/limits/limitsEngine.js";
 import { normalizePhone, pilotMode, pilotAllowedPhones, pilotCaps, pilotAccessAllowed, pilotCategoryAllowed } from "./src/config/pilot.js";
-import { getBeneficiary } from "./src/store.js";
+import { getBeneficiary as getMemoryBeneficiary } from "./src/store.js";
+import { getStoredBeneficiary } from "./src/beneficiaries/beneficiaryRepository.js";
 import { databaseConfigured, connectDatabase } from "./src/db/database.js";
 import {
   createPayment as persistPayment,
@@ -219,7 +220,17 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
   if (!pilotCategoryAllowed(category)) {
     return res.status(403).json({ error: "category_disabled" });
   }
-  const beneficiary = beneficiaryId ? getBeneficiary(req.phone, beneficiaryId) : null;
+  let beneficiary = null;
+  if (beneficiaryId) {
+    try {
+      beneficiary = databaseConfigured()
+        ? await getStoredBeneficiary(req.phone, beneficiaryId)
+        : getMemoryBeneficiary(req.phone, beneficiaryId);
+    } catch (error) {
+      console.error("[payments] beneficiary lookup failed", error?.code || "unknown");
+      return res.status(503).json({ error: "beneficiary_storage_unavailable" });
+    }
+  }
   const needsBeneficiary = ["vendor", "rent"].includes(String(category || "").toLowerCase());
   if (needsBeneficiary && !beneficiary) {
     return res.status(400).json({ error: "verified_beneficiary_required" });
@@ -301,6 +312,7 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
       PILOT_PER_TRANSACTION_LIMIT: "per_transaction_limit",
       PILOT_DAILY_LIMIT: "daily_limit",
       PILOT_MONTHLY_LIMIT: "monthly_limit",
+      BENEFICIARY_NOT_VERIFIED: "beneficiary_not_verified",
     };
     if (limitErrors[e?.code]) return res.status(403).json({ error: "limit_exceeded", reason: limitErrors[e.code] });
     console.error("[cashfree create] threw", e?.code || "unknown");

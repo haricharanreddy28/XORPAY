@@ -40,6 +40,17 @@ export async function createPayment({ id, phone, beneficiaryId, category, curren
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [phone]);
+    if (["vendor", "rent"].includes(String(category).toLowerCase())) {
+      const beneficiary = await client.query(
+        "SELECT id FROM xorpay_beneficiaries WHERE user_phone=$1 AND id=$2 AND verified=true FOR UPDATE",
+        [phone, beneficiaryId],
+      );
+      if (!beneficiary.rowCount) {
+        const error = new Error("verified_beneficiary_required");
+        error.code = "BENEFICIARY_NOT_VERIFIED";
+        throw error;
+      }
+    }
     const spend = await client.query(
       "SELECT COALESCE(SUM(payee_minor) FILTER (WHERE created_at >= date_trunc('day',now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata'),0) AS today, " +
       "COALESCE(SUM(payee_minor) FILTER (WHERE created_at >= date_trunc('month',now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata'),0) AS month " +

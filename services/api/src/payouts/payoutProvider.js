@@ -85,7 +85,7 @@ export class CashfreePayoutProvider {
       instrument = { bank_account_number: beneficiary.accountNumber, bank_ifsc: beneficiary.ifsc };
     } else if (beneficiary.type === "upi" && beneficiary.maskedAccount) {
       transferMode = "upi";
-      instrument = { vpa: beneficiary.maskedAccount };
+      instrument = { vpa: beneficiary.vpa || beneficiary.maskedAccount };
     } else {
       return { status: "FAILED", permanent: true, failureReason: "invalid_beneficiary_details" };
     }
