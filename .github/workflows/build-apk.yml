@@ -29,7 +29,7 @@ jobs:
       # Generate the android/ project (not committed in this starter).
       - run: flutter create .
 
-      # Plugin metadata currently requires compileSdk 36.
+      # Plugins (including sensors_plus 6) require compileSdk 36.
       - name: Patch SDK versions + permissions
         run: |
           grep -rl 'flutter.minSdkVersion' android/app | xargs sed -i 's/flutter.minSdkVersion/23/g' || true
