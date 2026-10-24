@@ -9,6 +9,8 @@ const NAV: [string, string][] = [
   ["Dashboard", "/dashboard"],
   ["KYC queue", "/kyc"],
   ["Transactions", "/transactions"],
+  ["Refunds", "/refunds"],
+  ["Reports", "/reports"],
   ["Reconciliation", "/reconciliation"],
 ];
 

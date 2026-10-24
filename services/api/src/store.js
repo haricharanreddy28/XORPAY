@@ -28,6 +28,21 @@ const referralCodes = new Map();
 /** phone -> [ notification ] */
 const notifications = new Map();
 
+/** refund_id -> refund request (maker-checker) */
+const refundRequests = new Map();
+
+export function createRefundRequest(req) {
+  const record = { id: newId("rfnd"), status: "pending", createdAt: Date.now(), ...req };
+  refundRequests.set(record.id, record);
+  return record;
+}
+export function getRefundRequest(id) {
+  return refundRequests.get(id) ?? null;
+}
+export function listRefundRequests() {
+  return [...refundRequests.values()].sort((a, b) => b.createdAt - a.createdAt);
+}
+
 const newId = (prefix) =>
   `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
