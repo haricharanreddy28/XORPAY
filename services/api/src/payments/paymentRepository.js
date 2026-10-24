@@ -114,3 +114,32 @@ export async function claimPayoutJobs({ limit = 10, leaseSeconds = 60 } = {}) {
 export function sha256Hex(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
+
+
+export async function getPaymentLedger(paymentId) {
+  const result = await getDatabase().query(
+    "SELECT entry_kind,account,debit_minor,credit_minor,created_at FROM xorpay_ledger_entries WHERE payment_id=$1 ORDER BY id",
+    [paymentId],
+  );
+  const groups = new Map();
+  for (const row of result.rows) {
+    let entry = groups.get(row.entry_kind);
+    if (!entry) {
+      entry = { txnId: paymentId, kind: row.entry_kind, lines: [], at: row.created_at.getTime() };
+      groups.set(row.entry_kind, entry);
+    }
+    entry.lines.push({ account: row.account, debitMinor: Number(row.debit_minor), creditMinor: Number(row.credit_minor) });
+  }
+  return [...groups.values()];
+}
+
+export async function getPaymentSpend(phone) {
+  const result = await getDatabase().query(
+    "SELECT " +
+    "COALESCE(SUM(payee_minor) FILTER (WHERE created_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata'),0) AS today, " +
+    "COALESCE(SUM(payee_minor) FILTER (WHERE created_at >= date_trunc('month', now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata'),0) AS month " +
+    "FROM xorpay_payments WHERE user_phone=$1 AND state IN ('PAYMENT_PENDING','PAID','PAYOUT_QUEUED','PAYOUT_PROCESSING','SUCCESS')",
+    [phone],
+  );
+  return { spentTodayMinor: Number(result.rows[0].today), spentMonthMinor: Number(result.rows[0].month) };
+}
