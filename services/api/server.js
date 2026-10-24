@@ -1,6 +1,6 @@
 // XORPAY API (dev/sandbox). Express today; NestJS + Prisma migration is Phase 4.
 //
-// Serves: stubbed OTP auth, Cashfree sandbox payments, KYC verification
+// Serves: Twilio OTP auth, Cashfree sandbox payments, KYC verification
 // (via a swappable provider), and the limits engine. In-memory stores.
 // NOT production — see each module's notes.
 //
@@ -12,6 +12,7 @@ import express from "express";
 import crypto from "node:crypto";
 
 import { makeToken, requireAuth } from "./src/auth.js";
+import { sendVerification, checkVerification } from "./src/auth/twilioVerify.js";
 import { orders, getKyc, getSpend } from "./src/store.js";
 import { kycRoutes } from "./src/kyc/kycRoutes.js";
 import { limitsRoutes } from "./src/limits/limitsRoutes.js";
@@ -73,19 +74,85 @@ app.use(
   })
 );
 
-// --- stubbed auth (so the app's OTP login works) -------------------------
-// Test OTP is always "123456".
-app.post("/auth/otp/request", (req, res) => {
-  const { phone } = req.body || {};
-  if (!phone) return res.status(400).json({ error: "phone_required" });
-  console.log(`[otp] ${phone} -> use test OTP 123456`);
-  res.json({ ok: true });
+// --- OTP authentication (Twilio Verify by default) -----------------------
+function normalizePhone(value) {
+  if (typeof value !== "string") return null;
+  const phone = value.trim().replace(/[\\s().-]/g, "");
+  if (/^[6-9]\\d{9}$/.test(phone)) return `+91${phone}`;
+  if (/^91[6-9]\\d{9}$/.test(phone)) return `+${phone}`;
+  if (/^\\+[1-9]\\d{7,14}$/.test(phone)) return phone;
+  return null;
+}
+
+const otpProvider = process.env.OTP_PROVIDER || "twilio";
+const otpStubCode = process.env.OTP_STUB_CODE || "123456";
+if (otpProvider === "stub" && process.env.NODE_ENV === "production") {
+  throw new Error("OTP_PROVIDER=stub is disabled in production");
+}
+const otpRequestHistory = new Map();
+const OTP_RESEND_MS = 30_000;
+const OTP_MAX_PER_HOUR = 5;
+
+app.post("/auth/otp/request", async (req, res) => {
+  const phone = normalizePhone(req.body?.phone);
+  if (!phone) return res.status(400).json({ error: "invalid_phone" });
+
+  const key = `${req.ip}:${phone}`;
+  const now = Date.now();
+  const recent = (otpRequestHistory.get(key) || []).filter((time) => now - time < 3_600_000);
+  if (recent.length && now - recent[recent.length - 1] < OTP_RESEND_MS) {
+    return res.status(429).json({ error: "otp_cooldown" });
+  }
+  if (recent.length >= OTP_MAX_PER_HOUR) {
+    return res.status(429).json({ error: "otp_rate_limited" });
+  }
+
+  try {
+    if (otpProvider === "stub") {
+      if (process.env.NODE_ENV === "production") {
+        return res.status(503).json({ error: "otp_not_configured" });
+      }
+      console.info("[otp] non-production stub enabled");
+    } else if (otpProvider === "twilio") {
+      await sendVerification(phone);
+    } else {
+      return res.status(503).json({ error: "otp_provider_not_supported" });
+    }
+
+    recent.push(now);
+    otpRequestHistory.set(key, recent);
+    res.json({ ok: true });
+  } catch (error) {
+    const status = error?.status === 503 ? 503 : 502;
+    console.error("[otp] verification request failed", status);
+    res.status(status).json({ error: status === 503 ? "otp_not_configured" : "otp_provider_unavailable" });
+  }
 });
 
-app.post("/auth/otp/verify", (req, res) => {
-  const { phone, otp } = req.body || {};
-  if (otp !== "123456") return res.status(401).json({ error: "bad_otp" });
-  res.json({ access_token: makeToken(phone), refresh_token: null });
+app.post("/auth/otp/verify", async (req, res) => {
+  const phone = normalizePhone(req.body?.phone);
+  const otp = req.body?.otp;
+  if (!phone) return res.status(400).json({ error: "invalid_phone" });
+  if (typeof otp !== "string" || !/^\\d{4,10}$/.test(otp)) {
+    return res.status(400).json({ error: "invalid_otp" });
+  }
+
+  try {
+    let approved = false;
+    if (otpProvider === "stub") {
+      approved = process.env.NODE_ENV !== "production" && otp === otpStubCode;
+    } else if (otpProvider === "twilio") {
+      approved = await checkVerification(phone, otp);
+    } else {
+      return res.status(503).json({ error: "otp_provider_not_supported" });
+    }
+    if (!approved) return res.status(401).json({ error: "bad_otp" });
+    res.json({ access_token: makeToken(phone), refresh_token: null });
+  } catch (error) {
+    const status = error?.status === 503 ? 503 : 502;
+    console.error("[otp] verification check failed", status);
+    res.status(status).json({ error: status === 503 ? "otp_not_configured" : "otp_provider_unavailable" });
+  }
 });
 
 // --- KYC + limits --------------------------------------------------------
