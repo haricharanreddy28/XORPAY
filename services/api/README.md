@@ -161,3 +161,15 @@ npm test   # node --test — runs the limits engine suite
   the API safe for live-money traffic. PostgreSQL persistence, durable payout
   processing, individual admin identity/audit, and provider production wiring
   remain release blockers.
+
+
+## Limited-pilot controls (proposed defaults)
+- Set `PILOT_MODE=true` only after the API has durable persistence and an
+  approved production payment path. An empty allowlist denies all OTP requests.
+- Store `PILOT_ALLOWLIST_PHONES` as E.164 phone numbers in AWS Secrets Manager.
+  The default maximum is 10 users; default allowed categories are vendor/rent.
+- Default per-user caps are ₹5,000 per transaction, ₹10,000 per day, and
+  ₹50,000 per month. Override only after your risk owner approves the amounts.
+- Order creation resolves beneficiary verification server-side; it ignores any
+  client-provided verified flag. Only the signed Cashfree webhook can trigger
+  ledger settlement and payout; `/payments/confirm` only reports provider status.
