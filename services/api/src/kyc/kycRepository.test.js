@@ -29,7 +29,7 @@ test("PostgreSQL stores KYC flags and encrypted identifiers and binds sessions t
     assert.equal(profile.panVerified, true);
     assert.equal(profile.gstVerified, true);
     assert.equal(profile.pan, "AB***34F");
-    assert.equal(profile.gstin, "27**********Z5");
+    assert.equal(profile.gstin, "27***********Z5");
     assert.equal("panCiphertext" in profile, false);
 
     const raw = await pool.query(
