@@ -1,11 +1,22 @@
-// Cashfree Payouts v2 adapter.
-// Contract verified against Cashfree's official Node SDK (2024-01-01 API):
-// POST /transfers and GET /transfers?transfer_id=..., authenticated with
-// x-client-id / x-client-secret. A stable transfer_id makes retries traceable.
+import crypto from "node:crypto";
 
+// Cashfree Payouts v2 adapter. Contract verified against Cashfree's official
+// Node SDK (API 2024-01-01): POST /transfers and GET /transfers?transfer_id=,
+// authenticated with x-client-id / x-client-secret.
 const API_VERSION = "2024-01-01";
 const FINAL_SUCCESS = new Set(["SUCCESS"]);
 const FINAL_FAILURE = new Set(["FAILED", "REJECTED"]);
+
+/** Fake provider is only for local development and automated tests. */
+export class StubPayoutProvider {
+  name = "stub";
+  async initiatePayout({ reference }) {
+    return { status: "SUCCESS", utr: `UTRSTUB${reference.slice(-8).toUpperCase()}` };
+  }
+  async getPayoutStatus() {
+    return { status: "SUCCESS" };
+  }
+}
 
 function mapResponse(data, httpOk = true) {
   const raw = String(data?.status ?? "").toUpperCase();
@@ -20,8 +31,8 @@ function mapResponse(data, httpOk = true) {
       providerReference: data?.cf_transfer_id ?? null,
     };
   }
-  // RECEIVED/TRANSFER_ACCEPTED/PENDING and unknown successful responses are
-  // deliberately non-terminal. Never turn uncertainty into a refund.
+  // RECEIVED/PENDING and unknown statuses are non-terminal. Never turn
+  // uncertainty into a refund.
   return {
     status: "PENDING",
     providerReference: data?.cf_transfer_id ?? null,
@@ -38,10 +49,7 @@ export class CashfreePayoutProvider {
     this.fetch = fetchImpl;
     this.apiVersion = apiVersion;
   }
-
-  get name() {
-    return "cashfree";
-  }
+  get name() { return "cashfree"; }
 
   _headers(requestId) {
     return {
@@ -53,9 +61,7 @@ export class CashfreePayoutProvider {
     };
   }
 
-  async _json(response) {
-    return response.json().catch(() => ({}));
-  }
+  async _json(response) { return response.json().catch(() => ({})); }
 
   async initiatePayout({ amountMinor, reference, beneficiary }) {
     if (!Number.isSafeInteger(amountMinor) || amountMinor < 100) {
@@ -75,10 +81,7 @@ export class CashfreePayoutProvider {
       if (!["imps", "neft", "rtgs", "banktransfer"].includes(transferMode)) {
         return { status: "FAILED", permanent: true, failureReason: "unsupported_transfer_mode" };
       }
-      instrument = {
-        bank_account_number: beneficiary.accountNumber,
-        bank_ifsc: beneficiary.ifsc,
-      };
+      instrument = { bank_account_number: beneficiary.accountNumber, bank_ifsc: beneficiary.ifsc };
     } else if (beneficiary.type === "upi" && beneficiary.maskedAccount) {
       transferMode = "upi";
       instrument = { vpa: beneficiary.maskedAccount };
@@ -86,7 +89,6 @@ export class CashfreePayoutProvider {
       return { status: "FAILED", permanent: true, failureReason: "invalid_beneficiary_details" };
     }
 
-    const requestId = crypto.randomUUID();
     const payload = {
       transfer_id: reference,
       transfer_amount: Number((amountMinor / 100).toFixed(2)),
@@ -98,21 +100,16 @@ export class CashfreePayoutProvider {
       },
       transfer_remarks: "XORPAY vendor payment",
     };
-
     try {
       const response = await this.fetch(`${this.baseUrl}/transfers`, {
         method: "POST",
-        headers: this._headers(requestId),
+        headers: this._headers(crypto.randomUUID()),
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(15_000),
       });
-      const data = await this._json(response);
-      // Any non-2xx is treated as uncertain unless Cashfree supplies a
-      // documented final transfer status. The worker reconciles by transfer_id.
-      return mapResponse(data, response.ok);
+      return mapResponse(await this._json(response), response.ok);
     } catch {
-      // A timeout can occur after Cashfree accepted the payout. Do not resubmit
-      // or refund here; query the original transfer_id during reconciliation.
+      // A timeout can occur after acceptance; reconcile by the same transfer_id.
       return { status: "PENDING", failureReason: "provider_response_unconfirmed" };
     }
   }
@@ -129,15 +126,13 @@ export class CashfreePayoutProvider {
         headers: this._headers(crypto.randomUUID()),
         signal: AbortSignal.timeout(15_000),
       });
-      const data = await this._json(response);
-      return mapResponse(data, response.ok);
+      return mapResponse(await this._json(response), response.ok);
     } catch {
       return { status: "PENDING", failureReason: "provider_status_unavailable" };
     }
   }
 }
 
-/** Dev uses a fake provider; production must explicitly configure Cashfree. */
 export function makePayoutProvider(env = process.env) {
   const production = env.NODE_ENV === "production" || String(env.CASHFREE_ENV || "").toUpperCase() === "PRODUCTION";
   const selected = String(env.PAYOUT_PROVIDER || (production ? "cashfree" : "stub")).toLowerCase();
@@ -149,14 +144,12 @@ export function makePayoutProvider(env = process.env) {
   if (!env.CASHFREE_PAYOUT_CLIENT_ID || !env.CASHFREE_PAYOUT_CLIENT_SECRET) {
     throw new Error("Cashfree Payouts credentials are required when PAYOUT_PROVIDER=cashfree");
   }
+  const baseUrl = env.CASHFREE_PAYOUT_BASE_URL || (String(env.CASHFREE_ENV).toUpperCase() === "PRODUCTION"
+    ? "https://api.cashfree.com/payout"
+    : "https://sandbox.cashfree.com/payout");
   return new CashfreePayoutProvider({
     clientId: env.CASHFREE_PAYOUT_CLIENT_ID,
     clientSecret: env.CASHFREE_PAYOUT_CLIENT_SECRET,
-    baseUrl: env.CASHFREE_PAYOUT_BASE_URL || (String(env.CASHFREE_ENV).toUpperCase() === "PRODUCTION"
-      ? "https://api.cashfree.com/payout"
-      : "https://sandbox.cashfree.com/payout"),
+    baseUrl,
   });
 }
-
-import crypto from "node:crypto";
-import { StubPayoutProvider } from "./stubPayoutProvider.js";
