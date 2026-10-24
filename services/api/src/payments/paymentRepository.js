@@ -22,20 +22,61 @@ function mapPayment(row) {
   };
 }
 
-export async function createPayment({ id, phone, beneficiaryId, category, currency = "INR", fee }) {
+export async function createPayment({ id, phone, beneficiaryId, category, currency = "INR", fee, limits }) {
   const amounts = [fee?.payeeMinor, fee?.feeMinor, fee?.gstMinor, fee?.youPayMinor];
   if (!amounts.every(Number.isSafeInteger) || fee.payeeMinor <= 0 || fee.feeMinor < 0 || fee.gstMinor < 0 || fee.youPayMinor !== fee.payeeMinor + fee.feeMinor + fee.gstMinor) {
     throw new TypeError("payment amounts must be safe integer minor units and balanced");
   }
-  const result = await getDatabase().query(
-    "INSERT INTO xorpay_payments (id,user_phone,beneficiary_id,category,currency,payee_minor,fee_minor,gst_minor,total_minor,state) " +
-    "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PAYMENT_PENDING') ON CONFLICT (id) DO NOTHING RETURNING " + COLUMNS,
-    [id, phone, beneficiaryId, category, currency, fee.payeeMinor, fee.feeMinor, fee.gstMinor, fee.youPayMinor],
-  );
-  if (result.rowCount) return mapPayment(result.rows[0]);
-  const existing = await getPayment(id);
-  if (!existing || existing.phone !== phone || existing.fee.payeeMinor !== fee.payeeMinor) throw new Error("payment_id_conflict");
-  return existing;
+  if (!limits || ![limits.perTxn, limits.daily, limits.monthly].every(Number.isSafeInteger)) {
+    throw new TypeError("effective payment limits are required");
+  }
+  if (fee.payeeMinor > limits.perTxn) {
+    const error = new Error("pilot_per_transaction_limit");
+    error.code = "PILOT_PER_TRANSACTION_LIMIT";
+    throw error;
+  }
+
+  const client = await getDatabase().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [phone]);
+    const spend = await client.query(
+      "SELECT COALESCE(SUM(payee_minor) FILTER (WHERE created_at >= date_trunc('day',now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata'),0) AS today, " +
+      "COALESCE(SUM(payee_minor) FILTER (WHERE created_at >= date_trunc('month',now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata'),0) AS month " +
+      "FROM xorpay_payments WHERE user_phone=$1 AND state IN ('PAYMENT_PENDING','PAID','PAYOUT_QUEUED','PAYOUT_PROCESSING','SUCCESS')",
+      [phone],
+    );
+    if (Number(spend.rows[0].today) + fee.payeeMinor > limits.daily) {
+      const error = new Error("pilot_daily_limit");
+      error.code = "PILOT_DAILY_LIMIT";
+      throw error;
+    }
+    if (Number(spend.rows[0].month) + fee.payeeMinor > limits.monthly) {
+      const error = new Error("pilot_monthly_limit");
+      error.code = "PILOT_MONTHLY_LIMIT";
+      throw error;
+    }
+
+    const result = await client.query(
+      "INSERT INTO xorpay_payments (id,user_phone,beneficiary_id,category,currency,payee_minor,fee_minor,gst_minor,total_minor,state) " +
+      "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PAYMENT_PENDING') ON CONFLICT (id) DO NOTHING RETURNING " + COLUMNS,
+      [id, phone, beneficiaryId, category, currency, fee.payeeMinor, fee.feeMinor, fee.gstMinor, fee.youPayMinor],
+    );
+    if (result.rowCount) {
+      await client.query("COMMIT");
+      return mapPayment(result.rows[0]);
+    }
+    const existingResult = await client.query("SELECT " + COLUMNS + " FROM xorpay_payments WHERE id=$1", [id]);
+    const existing = mapPayment(existingResult.rows[0]);
+    if (!existing || existing.phone !== phone || existing.fee.payeeMinor !== fee.payeeMinor) throw new Error("payment_id_conflict");
+    await client.query("COMMIT");
+    return existing;
+  } catch (error) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function setPaymentSession(id, sessionId) {
