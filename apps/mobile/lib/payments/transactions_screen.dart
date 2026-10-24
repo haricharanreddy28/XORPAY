@@ -121,7 +121,7 @@ class _TxnRow extends StatelessWidget {
         'vendor' => 'Vendor payment',
         'rent' => 'Rent',
         null => 'Payment',
-        _ => '${category![0].toUpperCase()}${category.substring(1)}',
+        _ => '${category[0].toUpperCase()}${category.substring(1)}',
       };
 
   static String _date(DateTime d) {

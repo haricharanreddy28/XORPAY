@@ -108,6 +108,7 @@ class PaymentService {
           .setPaymentSessionId(order.paymentSessionId)
           .build();
 
+      // ignore: deprecated_member_use
       final payment =
           CFDropCheckoutPaymentBuilder().setSession(session).build();
 

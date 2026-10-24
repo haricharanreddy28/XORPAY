@@ -97,7 +97,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final xc = context.xc;
     return Scaffold(
       appBar: AppBar(
         title: const Text('XORPAY'),
@@ -183,7 +182,7 @@ class _LimitsCard extends StatelessWidget {
       child: FutureBuilder<Limits>(
         future: future,
         builder: (context, snap) {
-          final onGrad = Colors.white;
+          const onGrad = Colors.white;
           if (snap.connectionState == ConnectionState.waiting) {
             return const SizedBox(
               height: 72,

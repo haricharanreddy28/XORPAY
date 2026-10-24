@@ -109,11 +109,12 @@ class ReceiptScreen extends StatelessWidget {
                 ),
               ),
               child: pw.Text('XORPAY',
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                       color: PdfColors.white, fontSize: 24, fontWeight: pw.FontWeight.bold)),
             ),
             pw.SizedBox(height: 24),
-            pw.Text('Payment receipt', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.Text('Payment receipt',
+                style: const pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 16),
             _pdfRow('Amount to payee', _money(payeeAmount)),
             _pdfRow('You paid', _money(youPay)),
@@ -139,7 +140,7 @@ class ReceiptScreen extends StatelessWidget {
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Text(label, style: const pw.TextStyle(color: PdfColors.grey800)),
-            pw.Text(value, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.Text(value, style: const pw.TextStyle(fontWeight: pw.FontWeight.bold)),
           ],
         ),
       );

@@ -39,6 +39,7 @@ class _NfcCardViewState extends State<NfcCardView> {
       b.map((x) => x.toRadixString(16).padLeft(2, '0')).join();
 
   Future<void> _scan() async {
+    // ignore: deprecated_member_use
     final available = await NfcManager.instance.isAvailable();
     if (!available) {
       setState(() => _status = 'NFC is off or unavailable on this device.');

@@ -85,7 +85,6 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final xc = context.xc;
     return Scaffold(
       appBar: AppBar(title: Text(widget.title ?? 'Pay')),
       body: SafeArea(
