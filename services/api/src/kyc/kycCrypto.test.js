@@ -15,6 +15,6 @@ test("KYC values use authenticated encryption bound to the user and field", () =
 
 test("KYC response identifiers are masked", () => {
   assert.equal(maskPan("ABCDE1234F"), "AB***34F");
-  assert.equal(maskGstin("27ABCDE1234F1Z5"), "27**********1Z5");
+  assert.equal(maskGstin("27ABCDE1234F1Z5"), "27***********Z5");
   assert.equal(maskPan("invalid"), null);
 });
