@@ -163,8 +163,26 @@ export function allKyc() {
  * Spend so far for a user. Still 0 here; a proper rollup from PAID/SUCCESS
  * transactions lands with the Postgres migration (Phase 4+).
  */
-export function getSpend(_phone) {
-  return { spentTodayMinor: 0, spentMonthMinor: 0 };
+export function getSpend(phone) {
+  const paidStates = new Set(["PAID", "PAYOUT_QUEUED", "PAYOUT_PROCESSING", "SUCCESS"]);
+  const dayKey = (timestamp) => {
+    const date = new Date(new Date(timestamp).getTime() + 330 * 60 * 1000);
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+  };
+  const monthKey = (timestamp) => dayKey(timestamp).slice(0, 7);
+  const today = dayKey(Date.now());
+  const month = today.slice(0, 7);
+  let spentTodayMinor = 0;
+  let spentMonthMinor = 0;
+
+  for (const txn of transactions.values()) {
+    if (txn.phone !== phone || !paidStates.has(txn.state)) continue;
+    const amount = txn.fee?.payeeMinor ?? 0;
+    const createdAt = txn.createdAt instanceof Date ? txn.createdAt : new Date(txn.createdAt);
+    if (dayKey(createdAt) === today) spentTodayMinor += amount;
+    if (monthKey(createdAt) === month) spentMonthMinor += amount;
+  }
+  return { spentTodayMinor, spentMonthMinor };
 }
 
 // --- transactions --------------------------------------------------------
