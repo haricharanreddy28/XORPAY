@@ -42,15 +42,15 @@ jobs:
 
       # Release, arm64 only — small APK, signed with the debug key (installs for
       # testing). Points at the deployed test backend.
-      # --no-shrink skips R8 (ML Kit references optional language recognizers
-      # that R8 flags as missing). Fine for a test APK.
+      # Debug build never runs R8 (which chokes on ML Kit's optional language
+      # recognizers), so it builds reliably. arm64-only keeps it smaller.
       - run: >-
-          flutter build apk --release --target-platform android-arm64 --no-shrink
+          flutter build apk --debug --target-platform android-arm64
           --dart-define=API_BASE_URL=https://xorpay.onrender.com
           --dart-define=CASHFREE_ENV=SANDBOX
 
       - uses: actions/upload-artifact@v4
         with:
           name: xorpay-apk
-          path: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          path: apps/mobile/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
