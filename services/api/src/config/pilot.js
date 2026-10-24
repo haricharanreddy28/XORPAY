@@ -1,8 +1,8 @@
 function normalizePhone(value) {
   if (typeof value !== "string") return null;
   const phone = value.trim().replace(/[\s().-]/g, "");
-  if (/^[6-9]\d{9}$/.test(phone)) return \`+91\${phone}\`;
-  if (/^91[6-9]\d{9}$/.test(phone)) return \`+\${phone}\`;
+  if (/^[6-9]\d{9}$/.test(phone)) return "+91" + phone;
+  if (/^91[6-9]\d{9}$/.test(phone)) return "+" + phone;
   if (/^\+[1-9]\d{7,14}$/.test(phone)) return phone;
   return null;
 }
@@ -21,12 +21,11 @@ export const pilotAllowedCategories = new Set(
     .filter(Boolean),
 );
 
-// Conservative, configurable pilot caps: ₹5,000/transaction, ₹10,000/day,
-// ₹50,000/month per user. Amounts are paise.
 function capFromEnv(name, fallback) {
   const value = Number(process.env[name]);
   return Number.isSafeInteger(value) && value > 0 ? value : fallback;
 }
+
 export const pilotCaps = Object.freeze({
   perTxn: capFromEnv("PILOT_MAX_TRANSACTION_MINOR", 500_000),
   daily: capFromEnv("PILOT_MAX_DAILY_MINOR", 1_000_000),
