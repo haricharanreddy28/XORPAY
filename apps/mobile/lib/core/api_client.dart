@@ -8,7 +8,7 @@ import 'config.dart';
 import 'secure_storage.dart';
 
 /// Single configured Dio instance for talking to YOUR backend.
-/// Handles bearer auth, one-time refresh on 401, and optional TLS pinning.
+/// Handles bearer auth, rotating refresh sessions, and optional TLS pinning.
 class ApiClient {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
@@ -37,13 +37,23 @@ class ApiClient {
         },
         onError: (e, handler) async {
           final path = e.requestOptions.path;
+          final alreadyRetried = e.requestOptions.extra['authRetry'] == true;
           final isAuthRequest = path.startsWith('/auth/');
-          if (e.response?.statusCode != 401 || isAuthRequest) {
+          if (e.response?.statusCode != 401 || isAuthRequest || alreadyRetried) {
             handler.next(e);
             return;
           }
 
-          final accessToken = await _refreshAccessToken();
+          String? accessToken;
+          try {
+            accessToken = await _refreshAccessToken();
+          } catch (_) {
+            // A transient network/server failure should not destroy a valid
+            // refresh token. Let the original request surface its 401.
+            handler.next(e);
+            return;
+          }
+
           if (accessToken == null) {
             await SecureStore.instance.clear();
             handler.next(e);
@@ -52,7 +62,8 @@ class ApiClient {
 
           try {
             final options = e.requestOptions
-              ..headers['Authorization'] = 'Bearer $accessToken';
+              ..headers['Authorization'] = 'Bearer $accessToken'
+              ..extra['authRetry'] = true;
             handler.resolve(await d.fetch(options));
           } catch (_) {
             await SecureStore.instance.clear();
@@ -85,14 +96,17 @@ class ApiClient {
       );
       final access = response.data['access_token'] as String?;
       final refresh = response.data['refresh_token'] as String?;
-      if (access == null || refresh == null) return null;
+      if (access == null || refresh == null) {
+        throw StateError('Refresh response did not contain both tokens');
+      }
       await SecureStore.instance.saveTokens(
         accessToken: access,
         refreshToken: refresh,
       );
       return access;
-    } catch (_) {
-      return null;
+    } on DioException catch (error) {
+      if (error.response?.statusCode == 401) return null;
+      rethrow;
     }
   }
 
