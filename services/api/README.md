@@ -187,3 +187,25 @@ npm test   # node --test — runs the limits engine suite
 - Order creation resolves beneficiary verification server-side; it ignores any
   client-provided verified flag. Only the signed Cashfree webhook can trigger
   ledger settlement and payout; `/payments/confirm` only reports provider status.
+
+
+## Real notification channels
+- Sign-in OTP uses Twilio Verify. Configure the Verify Service and Twilio credentials
+  from Secrets Manager; never reuse credentials pasted in chat. Use a dedicated
+  Twilio Messaging Service for transactional SMS and collect explicit user opt-in.
+- Transactional email and email verification use Amazon SES v2 in `ap-south-1`
+  with the API task role. Verify the sender/domain and move SES out of sandbox
+  before real recipients can receive mail.
+- Push uses Firebase Cloud Messaging Admin. Store the Firebase service account
+  JSON in Secrets Manager; the app initializes from per-platform Firebase values
+  provided as Flutter build-time defines.
+- `POST /notifications/email/request` sends a short-lived verification code;
+  `POST /notifications/email/verify` confirms it. `POST /notifications/devices`
+  registers an encrypted FCM token. Notification preferences default off except
+  push after device registration. Notification records and contact/device data
+  persist in PostgreSQL migration `006_notification_channels.sql`.
+- A production boot requires Twilio Verify + Messaging, SES sender, Firebase
+  Admin credentials, and Mumbai AWS region. Provider credentials are not checked
+  against live provider APIs during startup; account activation, SES production
+  access, sender/domain verification, and Firebase project setup remain operator
+  checks. External delivery failures do not change payment settlement.

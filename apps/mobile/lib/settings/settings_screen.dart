@@ -5,6 +5,7 @@ import 'package:xorpay_ui/xorpay_ui.dart';
 import '../account/account_service.dart';
 import '../account/statements_screen.dart';
 import '../auth/session.dart';
+import '../notifications/notification_preferences_screen.dart';
 
 /// Settings (spec §3.10): notifications, language, statements, logout, and
 /// delete account (with a cooling period).
@@ -77,6 +78,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     style: XType.body.copyWith(color: xc.textPrimary)),
                 value: acc?.notificationsEnabled ?? true,
                 onChanged: acc == null ? null : _setNotifications,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.notifications_active_outlined, color: xc.primary),
+                title: Text('Delivery preferences',
+                    style: XType.body.copyWith(color: xc.textPrimary)),
+                subtitle: const Text('SMS, email and push alerts'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const NotificationPreferencesScreen()),
+                ),
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,

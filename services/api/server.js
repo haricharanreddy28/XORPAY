@@ -13,6 +13,7 @@ import crypto from "node:crypto";
 
 import { createSession, rotateSession, revokeSession, connectAuthStore, requireAuth } from "./src/auth.js";
 import { sendVerification, checkVerification } from "./src/auth/twilioVerify.js";
+import { reserveOtpSend } from "./src/auth/otpRateLimit.js";
 import { orders, getKyc, getSpend as getMemorySpend } from "./src/store.js";
 import { kycRoutes } from "./src/kyc/kycRoutes.js";
 import { limitsRoutes } from "./src/limits/limitsRoutes.js";
@@ -27,7 +28,7 @@ import { supportRoutes } from "./src/support/supportRoutes.js";
 import { accountRoutes } from "./src/account/accountRoutes.js";
 import { computeCoins } from "./src/rewards/coins.js";
 import { awardCoins, listTransactions } from "./src/store.js";
-import { notify } from "./src/notifications/notifier.js";
+import { assertNotificationConfiguration, notify } from "./src/notifications/notifier.js";
 import { computeFee } from "./src/payments/fee.js";
 import { TxnState, canTransition } from "./src/payments/stateMachine.js";
 import {
@@ -124,7 +125,6 @@ const otpStubCode = process.env.OTP_STUB_CODE || "123456";
 if (otpProvider === "stub" && process.env.NODE_ENV === "production") {
   throw new Error("OTP_PROVIDER=stub is disabled in production");
 }
-const otpRequestHistory = new Map();
 const OTP_RESEND_MS = 30_000;
 const OTP_MAX_PER_HOUR = 5;
 
@@ -133,19 +133,12 @@ app.post("/auth/otp/request", async (req, res) => {
   if (!phone) return res.status(400).json({ error: "invalid_phone" });
   if (!pilotAccessAllowed(phone)) return res.status(403).json({ error: "pilot_access_required" });
 
-  const key = `${req.ip}:${phone}`;
-  const now = Date.now();
-  const recent = (otpRequestHistory.get(key) || []).filter((time) => now - time < 3_600_000);
-  if (recent.length && now - recent[recent.length - 1] < OTP_RESEND_MS) {
-    return res.status(429).json({ error: "otp_cooldown" });
-  }
-  if (recent.length >= OTP_MAX_PER_HOUR) {
-    return res.status(429).json({ error: "otp_rate_limited" });
-  }
-
   try {
+    const reserved = await reserveOtpSend(req.ip, phone);
+    if (!reserved) return res.status(429).json({ error: "otp_rate_limited" });
+
     if (otpProvider === "stub") {
-      if (process.env.NODE_ENV === "production") {
+      if (process.env.NODE_ENV === "production" || process.env.CASHFREE_ENV?.toUpperCase() === "PRODUCTION") {
         return res.status(503).json({ error: "otp_not_configured" });
       }
       console.info("[otp] non-production stub enabled");
@@ -154,9 +147,6 @@ app.post("/auth/otp/request", async (req, res) => {
     } else {
       return res.status(503).json({ error: "otp_provider_not_supported" });
     }
-
-    recent.push(now);
-    otpRequestHistory.set(key, recent);
     res.json({ ok: true });
   } catch (error) {
     const status = error?.status === 503 ? 503 : 502;
@@ -369,7 +359,8 @@ function markPaid(orderId) {
     isFirstTxn: priorPaid === 0,
   });
   awardCoins(txn.phone, coins, "payment", orderId);
-  notify(txn.phone, "Payment successful", `You earned ${coins} coins.`, "payment");
+  void notify(txn.phone, "Payment successful", `You earned ${coins} coins.`, "payment")
+    .catch((error) => console.error("[notification] persist failed", error?.code || "unknown"));
 
   // Queue the payout; the worker advances PAYOUT_QUEUED -> SUCCESS (or refunds).
   txn.state = TxnState.PAYOUT_QUEUED;
@@ -482,6 +473,7 @@ app.post("/auth/session/logout", async (req, res) => {
 });
 
 async function startServer() {
+  assertNotificationConfiguration(process.env);
   await connectAuthStore();
   if (databaseConfigured()) await connectDatabase();
   const durablePayoutWorker = databaseConfigured() ? startDurablePayoutWorker() : null;

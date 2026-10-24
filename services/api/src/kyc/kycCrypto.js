@@ -32,7 +32,7 @@ function keyring(env) {
 }
 
 function aad(phone, field) {
-  if (typeof phone !== "string" || !phone || !["pan", "gstin"].includes(field)) {
+  if (typeof phone !== "string" || !phone || !["pan", "gstin", "email", "push_token"].includes(field)) {
     throw new TypeError("KYC owner and field are required");
   }
   return Buffer.from(`xorpay:kyc:v1:${phone}:${field}`);

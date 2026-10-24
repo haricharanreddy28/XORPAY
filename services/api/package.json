@@ -16,6 +16,8 @@
   "dependencies": {
     "express": "^4.21.1",
     "pg": "^8.23.1",
-    "redis": "^4.7.0"
+    "redis": "^4.7.0",
+    "@aws-sdk/client-sesv2": "^3.800.0",
+    "firebase-admin": "^13.4.0"
   }
 }
