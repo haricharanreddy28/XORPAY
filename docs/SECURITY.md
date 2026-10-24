@@ -19,17 +19,19 @@ environment/process steps; **[wire]** are integration points left stubbed.
   (`flutter build apk --obfuscate --split-debug-info=…`).
 
 ## Backend hardening (spec §6)
+- **[code]** Live Cashfree mode currently fails closed at startup because business data, payouts, admin identity, and reconciliation are not production-ready.
 - **[code]** Limits enforced server-side before order creation.
 - **[code]** Double-entry ledger; payout settlement is idempotent.
 - **[code]** Maker-checker for refunds (different approver required).
-- **[ops]** Replace dev tokens: real user auth (JWT + device binding) and admin
-  accounts with RBAC; rotate `ADMIN_TOKENS`.
+- **[code]** Signed 15-minute access JWTs; Redis-backed rotating refresh tokens
+  with logout revocation. **[ops]** Add device binding and individual admin
+  accounts with MFA, RBAC, and durable audit records.
 - **[ops]** Move all secrets to a secrets manager; never in the repo.
-- **[ops]** Rate-limit OTP, login, payments, beneficiary adds; add velocity /
+- **[ops]** Move OTP/payment/beneficiary rate limits from process memory to Redis; add velocity /
   fraud rules (round-tripping, self-payments, shared beneficiaries).
 - **[ops]** Field-level encryption for PAN/Aadhaar refs and beneficiary account
   numbers; store Aadhaar only as a masked reference.
-- **[ops]** Verify every PSP/webhook signature (Cashfree webhook already does).
+- **[code]** Verify Cashfree webhook signatures; **[ops]** add replay/idempotency records in PostgreSQL and verify every provider callback.
 
 ## Compliance (spec §6)
 - **[ops]** Collect/settle only via an RBI-authorised PA; do not hold funds.
