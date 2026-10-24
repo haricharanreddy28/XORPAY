@@ -58,6 +58,9 @@ flutter run \
 | `POST /invoices/import` | pull purchase invoices from GSTR-2A/2B |
 | `GET /invoices` · `GET /invoices/suppliers` | list / unpaid totals by supplier |
 | `POST /invoices/quote` · `POST /invoices/mark-paid` | TDS-aware payable; settle |
+| `GET /rewards` | coins balance + history |
+| `GET /referrals` · `POST /referrals/redeem` | referral code; redeem (rewards both) |
+| `GET /notifications` · `POST /notifications/:id/read` | notification centre |
 | `POST /webhooks/cashfree` | Cashfree's authoritative callback (set as notify URL) |
 | `GET /health` | liveness (`payments` flag shows if Cashfree is configured) |
 
@@ -110,6 +113,16 @@ flutter run \
   deduction for "pay with TDS" vs full payment.
 - Flow: import → `/invoices/suppliers` (unpaid totals) → select invoices →
   `/invoices/quote` (gross/TDS/net) → pay via `/payments/orders` → `/invoices/mark-paid`.
+
+## Rewards / referrals / notifications (Phase 6)
+- **Coins rule engine** (`src/rewards/coins.js`), pure + unit-tested: base rate
+  per ₹100, category multiplier (rent 2×), first-transaction bonus, RuPay bonus.
+- A successful payment awards coins and posts a notification (inside the
+  idempotent `markPaid`, so once per transaction).
+- **Referrals**: each user gets a code; redeeming rewards both sides once
+  (self-referral and double-redeem are blocked).
+- **Notifications**: persisted in-app; `notifier.sendPush` is an FCM stub —
+  wire the FCM Admin SDK + device tokens for real push.
 
 ## Test
 ```bash

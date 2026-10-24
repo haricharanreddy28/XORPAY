@@ -19,6 +19,11 @@ import { cardRoutes } from "./src/cards/cardRoutes.js";
 import { beneficiaryRoutes } from "./src/beneficiaries/beneficiaryRoutes.js";
 import { transactionRoutes } from "./src/payments/transactionRoutes.js";
 import { invoiceRoutes } from "./src/invoices/invoiceRoutes.js";
+import { rewardsRoutes, referralRoutes } from "./src/rewards/rewardsRoutes.js";
+import { notificationRoutes } from "./src/notifications/notificationRoutes.js";
+import { computeCoins } from "./src/rewards/coins.js";
+import { awardCoins, listTransactions } from "./src/store.js";
+import { notify } from "./src/notifications/notifier.js";
 import { computeFee } from "./src/payments/fee.js";
 import { TxnState, canTransition } from "./src/payments/stateMachine.js";
 import {
@@ -93,6 +98,11 @@ app.use("/transactions", transactionRoutes());
 
 // --- invoices (GST Hub) --------------------------------------------------
 app.use("/invoices", invoiceRoutes());
+
+// --- rewards, referrals, notifications -----------------------------------
+app.use("/rewards", rewardsRoutes());
+app.use("/referrals", referralRoutes());
+app.use("/notifications", notificationRoutes());
 
 // --- payments ------------------------------------------------------------
 function requireCashfree(_req, res, next) {
@@ -185,9 +195,22 @@ function markPaid(orderId) {
   if (!canTransition(txn.state, TxnState.PAID)) return; // already settled
   txn.state = TxnState.PAID;
   ledger.postPayment(orderId, txn.fee);
+
+  // Rewards: award coins + notify (once, inside the idempotent settle block).
+  const priorPaid = listTransactions(txn.phone).filter(
+    (t) => t.id !== orderId && !["CREATED", "PAYMENT_PENDING", "FAILED"].includes(t.state),
+  ).length;
+  const coins = computeCoins({
+    payeeMinor: txn.fee.payeeMinor,
+    category: txn.category,
+    isFirstTxn: priorPaid === 0,
+  });
+  awardCoins(txn.phone, coins, "payment", orderId);
+  notify(txn.phone, "Payment successful", `You earned ${coins} coins.`, "payment");
+
   // Queue the payout; the worker advances PAYOUT_QUEUED -> SUCCESS (or refunds).
   txn.state = TxnState.PAYOUT_QUEUED;
-  console.log(`[txn] ${orderId} -> PAID -> PAYOUT_QUEUED`);
+  console.log(`[txn] ${orderId} -> PAID -> PAYOUT_QUEUED (+${coins} coins)`);
   enqueuePayout(orderId);
 }
 

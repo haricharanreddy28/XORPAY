@@ -18,6 +18,16 @@ const transactions = new Map();
 /** phone -> [ invoice ] */
 const invoices = new Map();
 
+/** phone -> { balance, history: [...] } */
+const rewards = new Map();
+
+/** phone -> { code, referredBy, referrals: [...] }  and  code -> phone */
+const referrals = new Map();
+const referralCodes = new Map();
+
+/** phone -> [ notification ] */
+const notifications = new Map();
+
 const newId = (prefix) =>
   `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
@@ -132,6 +142,63 @@ export function markInvoicesPaid(phone, ids, txnId = null) {
     set.has(i.id) ? { ...i, status: "paid", paidTxnId: txnId } : i,
   );
   invoices.set(phone, next);
+}
+
+// --- rewards (coins) -----------------------------------------------------
+export function getRewards(phone) {
+  return rewards.get(phone) ?? { balance: 0, history: [] };
+}
+export function awardCoins(phone, coins, reason, txnId = null) {
+  if (!(coins > 0)) return getRewards(phone);
+  const cur = getRewards(phone);
+  const next = {
+    balance: cur.balance + coins,
+    history: [{ coins, reason, txnId, at: Date.now() }, ...cur.history],
+  };
+  rewards.set(phone, next);
+  return next;
+}
+
+// --- referrals -----------------------------------------------------------
+export function getReferral(phone) {
+  let r = referrals.get(phone);
+  if (!r) {
+    const code =
+      "XOR" +
+      crypto.createHash("sha1").update(phone).digest("hex").slice(0, 6).toUpperCase();
+    r = { code, referredBy: null, referrals: [] };
+    referrals.set(phone, r);
+    referralCodes.set(code, phone);
+  }
+  return r;
+}
+export function phoneForReferralCode(code) {
+  return referralCodes.get((code || "").toUpperCase()) ?? null;
+}
+export function recordReferral(ownerPhone, newUserPhone) {
+  const owner = getReferral(ownerPhone);
+  owner.referrals = [...owner.referrals, newUserPhone];
+  referrals.set(ownerPhone, owner);
+  const invitee = getReferral(newUserPhone);
+  invitee.referredBy = ownerPhone;
+  referrals.set(newUserPhone, invitee);
+}
+
+// --- notifications -------------------------------------------------------
+export function listNotifications(phone) {
+  return notifications.get(phone) ?? [];
+}
+export function addNotification(phone, note) {
+  const list = listNotifications(phone);
+  const record = { id: newId("ntf"), read: false, at: Date.now(), ...note };
+  notifications.set(phone, [record, ...list]);
+  return record;
+}
+export function markNotificationRead(phone, id) {
+  notifications.set(
+    phone,
+    listNotifications(phone).map((n) => (n.id === id ? { ...n, read: true } : n)),
+  );
 }
 
 // --- shared double-entry ledger -----------------------------------------
