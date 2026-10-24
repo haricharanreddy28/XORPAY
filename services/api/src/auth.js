@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { createClient } from "redis";
 
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = process.env.NODE_ENV === "production" || process.env.CASHFREE_ENV?.toUpperCase() === "PRODUCTION";
 const jwtSecret = process.env.JWT_SECRET || (isProduction ? "" : "xorpay-local-development-only-secret");
 if (isProduction && Buffer.byteLength(jwtSecret) < 32) {
   throw new Error("JWT_SECRET must contain at least 32 bytes in production");
