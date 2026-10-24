@@ -42,8 +42,10 @@ jobs:
 
       # Release, arm64 only — small APK, signed with the debug key (installs for
       # testing). Points at the deployed test backend.
+      # --no-shrink skips R8 (ML Kit references optional language recognizers
+      # that R8 flags as missing). Fine for a test APK.
       - run: >-
-          flutter build apk --release --target-platform android-arm64
+          flutter build apk --release --target-platform android-arm64 --no-shrink
           --dart-define=API_BASE_URL=https://xorpay.onrender.com
           --dart-define=CASHFREE_ENV=SANDBOX
 
