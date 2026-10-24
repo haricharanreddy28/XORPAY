@@ -76,7 +76,7 @@ export function maskPan(value) {
 export function maskGstin(value) {
   const gstin = String(value || "").toUpperCase();
   if (gstin.length !== 15) return null;
-  return `${gstin.slice(0, 2)}**********${gstin.slice(-3)}`;
+  return `${gstin.slice(0, 2)}***********${gstin.slice(-2)}`;
 }
 
 export function sha256KycSession(phone, purpose, providerSessionId) {
