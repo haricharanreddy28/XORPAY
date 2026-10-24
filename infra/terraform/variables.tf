@@ -42,3 +42,9 @@ variable "admin_hostname" {
   type        = string
   default     = "admin.xorpay.online"
 }
+
+variable "create_edge_certificate" {
+  description = "Enable after the registrar delegates the domain to the Route 53 nameservers."
+  type        = bool
+  default     = false
+}

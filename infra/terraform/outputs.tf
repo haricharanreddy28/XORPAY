@@ -25,5 +25,5 @@ output "admin_hostname" {
 
 output "edge_certificate_arn" {
   description = "Validated ACM certificate ARN for API/admin HTTPS listeners."
-  value       = aws_acm_certificate_validation.edge.certificate_arn
+  value       = try(aws_acm_certificate_validation.edge[0].certificate_arn, null)
 }

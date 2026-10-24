@@ -1,92 +1,77 @@
-# Deployment — step by step
+# XORPAY pilot deployment
 
-Two things get deployed: the **backend** (an HTTPS server holding your Cashfree
-secret key) and the **Flutter app** (a signed build users install).
+The repository contains a limited-pilot foundation, not a live-money release.
+Production startup remains deliberately blocked until the remaining admin,
+reconciliation, monitoring, and operational controls are independently
+verified. Do not point production Cashfree credentials at this branch.
 
-> ⚠️ Gate first: the API remains a sandbox service. It now has signed access
-> JWTs and rotating Redis refresh sessions, but business/payment records remain
-> in process memory. The API refuses `CASHFREE_ENV=PRODUCTION` until PostgreSQL,
-> durable payouts, production admin identity, and reconciliation are implemented.
+## 1. Create the Route 53 hosted zone
 
----
+The domain registrar is outside AWS. Use an AWS IAM Identity Center profile or
+another short-lived AWS credential flow for account `157000087920`; never paste
+AWS keys into chat or commit them.
 
-## Part 0 — Harden the backend (before real money)
-1. Replace stubbed OTP + base64 tokens with real auth (JWT or sessions, plus
-   device/SIM binding).
-2. Replace the in-memory `orders` Map with a database (Postgres). Add an
-   idempotency key on order creation and on webhook handling.
-3. Keep the secret key in the host's secret manager — never in the repo.
-4. Rely on the **webhook** for "paid", not the client confirm call.
+In PowerShell:
 
----
-
-## Part A — AWS Mumbai pilot deployment
-
-The target is AWS `ap-south-1`. The planned stack uses private application
-subnets, encrypted PostgreSQL and Redis, Secrets Manager, CloudWatch, and HTTPS
-ingress. Provisioning is deferred until the application data layer and pilot
-release gates are implemented. Do not point live Cashfree credentials at the
-current in-memory API.
-
-## Part B — Build & release the Flutter app
-
-### B1. Generate native folders (first time)
-```bash
-flutter create .      # from project root; keeps lib/ and pubspec.yaml
-flutter pub get
+```powershell
+cd infra/terraform
+Copy-Item terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars: set aws_account_id to your 12-digit account ID.
+terraform init
+terraform plan -out zone.tfplan
+terraform apply zone.tfplan
+terraform output -json registrar_nameservers
 ```
 
-### B2. Create a signing key (Android)
-```bash
-keytool -genkey -v -keystore upload-keystore.jks \
-  -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+This first apply creates only the public Route 53 zone for `xorpay.online`.
+At the domain registrar, replace the current nameservers with all four returned
+nameservers. Wait for delegation to propagate before continuing. The zone is
+protected with `prevent_destroy`.
+
+## 2. Request and validate ACM
+
+After public DNS resolves through Route 53, enable certificate creation in
+`terraform.tfvars`:
+
+```hcl
+create_edge_certificate = true
 ```
-Store it **outside** the repo. Create `android/key.properties` (git-ignored):
+
+Then run:
+
+```powershell
+terraform plan -out edge.tfplan
+terraform apply edge.tfplan
+terraform output edge_certificate_arn
 ```
-storePassword=...
-keyPassword=...
-keyAlias=upload
-storeFile=/absolute/path/to/upload-keystore.jks
-```
-Wire it into `android/app/build.gradle` (see Flutter's "Sign the app" docs) so
-`release` builds use it.
 
-### B3. Build the release bundle, injecting prod config
-```bash
-flutter build appbundle --release \
-  --dart-define=API_BASE_URL=https://xorpay-backend.onrender.com \
-  --dart-define=CASHFREE_ENV=SANDBOX \
-  --obfuscate --split-debug-info=build/symbols
-```
-Output: `build/app/outputs/bundle/release/app-release.aab`.
-(For a quick sideload test instead: `flutter build apk --release ...`.)
+The certificate covers `api.xorpay.online` and `admin.xorpay.online` in
+`ap-south-1`. This bootstrap does not deploy either application or create
+their DNS A/ALIAS records; those records are added with the load balancer later.
 
-### B4. Distribute
-- **Play Store:** play.google.com/console → create app → upload the `.aab` to
-  the **Internal testing** track first → add testers → promote to production
-  after it passes. Payments apps get extra Play review — declare permissions
-  and provide a privacy policy.
-- **iOS:** `flutter build ipa`, upload via Xcode/Transporter to App Store
-  Connect → TestFlight → review.
+Terraform state contains resource identifiers. Keep it out of Git and back it
+up securely. Do not commit `terraform.tfvars`, plan files, or state files.
 
----
+## 3. Configure application infrastructure
 
-## Part C — Go live with real money
-1. Complete **Cashfree business KYC**; get it approved.
-2. Swap backend env to **production** keys + `CASHFREE_ENV=PRODUCTION`; redeploy.
-3. Rebuild the app with `--dart-define=CASHFREE_ENV=PRODUCTION` and the prod
-   `API_BASE_URL`.
-4. First real transaction: **₹1, then refund it.** Verify the webhook marked it
-   paid and your records match.
-5. Only then open it to users.
+Before deploying the API, provision the Mumbai runtime, private PostgreSQL,
+Redis, encrypted object storage, Secrets Manager entries, TLS ingress, backups,
+monitoring, and alerting. Use least-privilege IAM roles and short-lived
+credentials. The repository does not yet provision this runtime.
 
----
+The backend now has PostgreSQL payment reservations, encrypted beneficiary
+destinations, signature-verified Cashfree collection webhooks, a durable payout
+outbox, Cashfree payout status recovery, and refund ledgering after confirmed
+Cashfree refund success. Remaining launch gates include production admin
+authentication and maker-checker audit, persistence for remaining domains,
+settlement/reconciliation workflows, operational alerts, provider contract
+verification against your merchant account, and reviewed compliance/support
+runbooks. Production mode is disabled in code until those controls are
+complete.
 
-## Minimal pre-launch checklist
-- [ ] Backend hardened (Part 0) — no in-memory store, no stubbed auth in prod
-- [ ] Secrets only in the host's env, not the repo
-- [ ] Webhook registered and verified as the source of truth for "paid"
-- [ ] App signed with a safely stored keystore
-- [ ] TLS pins added in `lib/core/config.dart` for your API domain
-- [ ] Privacy policy + permission justifications ready for store review
-- [ ] Cashfree KYC approved before production keys
+## 4. Mobile release
+
+Use the internal Play testing track first. Build only with the pilot API
+hostname after the HTTPS runtime and mobile security configuration are ready.
+Keep signing keys outside GitHub and restrict distribution to the allowlisted
+pilot users. A debug APK or sandbox build is not a production release.
