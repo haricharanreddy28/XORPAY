@@ -37,6 +37,7 @@ import {
 } from "./src/store.js";
 import { enqueuePayout } from "./src/payouts/payoutQueue.js";
 import { startDurablePayoutWorker } from "./src/payouts/durablePayoutWorker.js";
+import { getKycProfile } from "./src/kyc/kycRepository.js";
 import { tierForKyc, evaluate } from "./src/limits/limitsEngine.js";
 import { normalizePhone, pilotMode, pilotAllowedPhones, pilotCaps, pilotAccessAllowed, pilotCategoryAllowed } from "./src/config/pilot.js";
 import { getBeneficiary as getMemoryBeneficiary } from "./src/store.js";
@@ -110,6 +111,7 @@ const app = express();
 app.use(adminCors);
 app.use(
   express.json({
+    limit: "2mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
@@ -259,10 +261,18 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
   }
 
   // Server-side limits enforcement (never trust client-supplied KYC or payee status).
-  const kyc = getKyc(req.phone);
-  const { spentTodayMinor, spentMonthMinor } = databaseConfigured()
-    ? await getPaymentSpend(req.phone)
-    : getMemorySpend(req.phone);
+  let kyc;
+  let spentTodayMinor;
+  let spentMonthMinor;
+  try {
+    kyc = databaseConfigured() ? await getKycProfile(req.phone) : getKyc(req.phone);
+    ({ spentTodayMinor, spentMonthMinor } = databaseConfigured()
+      ? await getPaymentSpend(req.phone)
+      : getMemorySpend(req.phone));
+  } catch (error) {
+    console.error("[payments] KYC or limit lookup failed", error?.code || "unknown");
+    return res.status(503).json({ error: "limits_unavailable" });
+  }
   const decision = evaluate({
     tier: tierForKyc(kyc),
     amountMinor: amount,

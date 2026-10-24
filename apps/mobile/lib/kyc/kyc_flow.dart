@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -195,17 +198,41 @@ class _AadhaarStep extends StatelessWidget {
 // ---- Step 3: Selfie ------------------------------------------------------
 class _SelfieStep extends StatelessWidget {
   const _SelfieStep();
+
+  Future<void> _capture(BuildContext context) async {
+    try {
+      final cameras = await availableCameras();
+      final camera = cameras.firstWhere(
+        (item) => item.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+      if (!context.mounted) return;
+      final image = await Navigator.of(context).push<Uint8List>(
+        MaterialPageRoute(builder: (_) => _SelfieCapturePage(camera: camera)),
+      );
+      if (image != null && context.mounted) {
+        await context.read<KycController>().submitSelfie(image);
+      }
+    } catch (_) {
+      if (context.mounted) {
+        context.read<KycController>().showError(
+          'Camera unavailable. Check camera permission and try again.',
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final xc = context.xc;
     final kyc = context.watch<KycController>();
     return _StepLayout(
       title: 'Quick selfie',
-      why: 'A liveness check confirms it’s really you and prevents fraud.',
+      why: 'Cashfree checks that your selfie is live to help prevent fraud.',
       busy: kyc.busy,
       error: kyc.error,
       cta: 'Take selfie',
-      onCta: () => context.read<KycController>().submitSelfie(),
+      onCta: () => _capture(context),
       child: Center(
         child: Container(
           width: 200,
@@ -217,6 +244,84 @@ class _SelfieStep extends StatelessWidget {
           child: Icon(Icons.face_retouching_natural,
               size: 96, color: xc.textMuted),
         ),
+      ),
+    );
+  }
+}
+
+class _SelfieCapturePage extends StatefulWidget {
+  const _SelfieCapturePage({required this.camera});
+  final CameraDescription camera;
+
+  @override
+  State<_SelfieCapturePage> createState() => _SelfieCapturePageState();
+}
+
+class _SelfieCapturePageState extends State<_SelfieCapturePage> {
+  late final CameraController _camera =
+      CameraController(widget.camera, ResolutionPreset.medium, enableAudio: false);
+  late final Future<void> _initialized = _camera.initialize();
+  bool _capturing = false;
+
+  @override
+  void dispose() {
+    _camera.dispose();
+    super.dispose();
+  }
+
+  Future<void> _takePicture() async {
+    if (_capturing) return;
+    setState(() => _capturing = true);
+    try {
+      await _initialized;
+      final file = await _camera.takePicture();
+      final bytes = await file.readAsBytes();
+      if (mounted) Navigator.of(context).pop(bytes);
+    } catch (_) {
+      if (mounted) setState(() => _capturing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Take a selfie')),
+      body: FutureBuilder<void>(
+        future: _initialized,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Center(child: Text('Camera could not be started.'));
+          }
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              CameraPreview(_camera),
+              Align(
+                alignment: Alignment.center,
+                child: Container(
+                  width: 240,
+                  height: 300,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.white, width: 2),
+                    borderRadius: const BorderRadius.all(Radius.elliptical(120, 150)),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 24,
+                right: 24,
+                bottom: 24,
+                child: FilledButton(
+                  onPressed: _capturing ? null : _takePicture,
+                  child: Text(_capturing ? 'Checking…' : 'Capture selfie'),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

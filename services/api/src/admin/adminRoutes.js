@@ -2,6 +2,7 @@ import { Router } from "express";
 import crypto from "node:crypto";
 import { databaseConfigured, getDatabase } from "../db/database.js";
 import { verifyAdminAccessToken } from "./adminAuth.js";
+import { listKycProfiles, updateKycReview } from "../kyc/kycRepository.js";
 
 import {
   allTransactions,
@@ -149,8 +150,9 @@ export function adminRoutes() {
   });
 
   // KYC review (compliance).
-  router.get("/kyc", requireRole("compliance"), (_req, res) => {
-    const users = allKyc().map((k) => ({
+  router.get("/kyc", requireRole("compliance"), async (_req, res) => {
+    try {
+    const users = (databaseConfigured() ? await listKycProfiles() : allKyc()).map((k) => ({
       phone: k.phone,
       tier: tierForKyc(k),
       panVerified: k.panVerified,
@@ -161,18 +163,35 @@ export function adminRoutes() {
       reviewStatus: k.reviewStatus ?? "pending",
     }));
     res.json({ users });
+    } catch (error) {
+      console.error("[admin] KYC list failed", error?.code || "unknown");
+      res.status(503).json({ error: "kyc_storage_unavailable" });
+    }
   });
 
-  router.post("/kyc/:phone/decision", requireRole("compliance"), (req, res) => {
+  router.post("/kyc/:phone/decision", requireRole("compliance"), async (req, res) => {
     const decision = req.body?.decision;
     if (!["approve", "reject"].includes(decision)) {
       return res.status(400).json({ error: "bad_decision" });
     }
-    updateKyc(req.params.phone, {
-      reviewStatus: decision === "approve" ? "approved" : "rejected",
-      reviewReason: req.body?.reason ?? null,
-    });
-    res.json({ ok: true });
+    try {
+      if (databaseConfigured()) {
+        const updated = await updateKycReview(req.params.phone, {
+          reviewStatus: decision === "approve" ? "approved" : "rejected",
+          reviewReason: typeof req.body?.reason === "string" ? req.body.reason.slice(0, 500) : null,
+        });
+        if (!updated) return res.status(404).json({ error: "unknown_kyc_profile" });
+      } else {
+        updateKyc(req.params.phone, {
+          reviewStatus: decision === "approve" ? "approved" : "rejected",
+          reviewReason: typeof req.body?.reason === "string" ? req.body.reason.slice(0, 500) : null,
+        });
+      }
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("[admin] KYC decision failed", error?.code || "unknown");
+      res.status(503).json({ error: "kyc_storage_unavailable" });
+    }
   });
 
   router.get("/transactions", (_req, res) =>
