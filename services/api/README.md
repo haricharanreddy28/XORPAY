@@ -138,7 +138,7 @@ npm test   # node --test — runs the limits engine suite
 ```
 
 ## Before production (do not skip)
-- Replace the in-memory OTP rate limiter and base64 tokens with shared rate limiting and signed JWT/session auth with device binding.
+- Move OTP rate limiting to Redis and add device binding.
 - Replace the in-memory `orders` Map with a database; add idempotency keys.
 - Register the webhook URL in the Cashfree dashboard and rely on it for "paid".
 - Move secret key to a secrets manager; never commit it.
