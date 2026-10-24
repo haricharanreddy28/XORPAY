@@ -1,7 +1,6 @@
 # Xorpay test backend (Cashfree sandbox)
 
-Minimal Node/Express server so you can run a **real Cashfree checkout with test
-money** and phone verification through Twilio Verify. Refresh sessions use Redis when configured; transaction and business state remain in-memory — **not production**.
+Node/Express API for Cashfree checkout and Twilio Verify. Refresh sessions use Redis when configured. Payment orders, collection ledger entries, verified webhook receipts, and payout outbox rows can use PostgreSQL; other business domains still have in-memory stores, so this is **not production-ready**.
 
 ## 1. Get sandbox keys
 1. merchant.cashfree.com → Developers → API Keys → **Sandbox** → copy App ID + Secret Key.
@@ -11,7 +10,9 @@ money** and phone verification through Twilio Verify. Refresh sessions use Redis
 ```bash
 cd services/api
 npm install
-# Set these in your shell or a local .env loader; never commit real credentials.
+# Configure DATABASE_URL for local PostgreSQL, then apply the SQL schema:
+npm run migrate
+# Set provider credentials in your shell or a local .env loader; never commit real credentials.
 CASHFREE_APP_ID=xxx CASHFREE_SECRET_KEY=yyy \
 TWILIO_ACCOUNT_SID=AC... TWILIO_AUTH_TOKEN=... \
 TWILIO_VERIFY_SERVICE_SID=VA... node server.js
@@ -59,7 +60,7 @@ flutter run \
 | `GET /beneficiaries` · `POST /beneficiaries` | list / add + verify payee |
 | `POST /beneficiaries/:id/verify` · `DELETE /beneficiaries/:id` | re-verify / remove |
 | `POST /payments/orders` | limits check → fee → Cashfree order (charges youPay) |
-| `POST /payments/confirm` | reads real status; settles ledger + state on PAID |
+| `POST /payments/confirm` | reports Cashfree status only; signed webhook settles the payment |
 | `GET /transactions` · `GET /transactions/:id` | history + detail (with ledger) |
 | `POST /invoices/import` | pull purchase invoices from GSTR-2A/2B |
 | `GET /invoices` · `GET /invoices/suppliers` | list / unpaid totals by supplier |
@@ -79,7 +80,7 @@ flutter run \
 - **Limits engine** (`src/limits/limitsEngine.js`) is pure and unit-tested
   (`npm test`): KYC tier → per-transaction / daily / monthly caps, with a lower
   cap for unverified beneficiaries. It's enforced server-side in `/payments/orders`.
-- Spend tracking is stubbed at 0 until the ledger lands (Phase 4).
+- When `DATABASE_URL` is configured, payment spend is read from PostgreSQL and each new order reserves daily/monthly cap under a per-user advisory lock. The in-memory path remains for local tests without a database.
 
 ## Cards & beneficiaries (Phase 3)
 - **Cards** (`src/cards/`): the backend stores only the PSP **token reference**
@@ -103,8 +104,15 @@ flutter run \
 - **State machine** (`src/payments/stateMachine.js`): CREATED → PAYMENT_PENDING
   → PAID → PAYOUT_QUEUED → PAYOUT_PROCESSING → SUCCESS | FAILED →
   REFUND_INITIATED → REFUNDED. Illegal transitions throw.
-- Settlement is **idempotent**: `markPaid` posts the ledger + advances state
-  once, driven by the confirm endpoint and (authoritatively) the webhook.
+- With PostgreSQL configured, verified Cashfree webhook receipt, state transition,
+  balanced ledger lines, and payout outbox insert share one transaction. Unique
+  event keys plus a row lock prevent duplicate concurrent ledger posts. Confirm
+  only reports status; it never settles or queues a payout.
+- **PostgreSQL core** (`migrations/001_payment_core.sql`): payments, balanced
+  ledger lines, webhook dedupe records, encrypted-destination storage schema,
+  and a `FOR UPDATE SKIP LOCKED` payout outbox lease query. Apply with
+  `npm run migrate`; production TLS is mandatory. The durable outbox still needs
+  its worker, beneficiary persistence/encryption, and refund lifecycle before launch.
 - **Payout adapter** (`src/payouts/payoutProvider.js`): Cashfree Payouts v2
   uses its separate client ID/secret, `/transfers`, and API version `2024-01-01`.
   Configure `PAYOUT_PROVIDER=cashfree` and the separate `CASHFREE_PAYOUT_*`
@@ -143,8 +151,9 @@ npm test   # node --test — runs the limits engine suite
 - The API refuses to start with `NODE_ENV=production` or
   `CASHFREE_ENV=PRODUCTION` until persistence, payouts, admin auth, and
   reconciliation are completed.
-- Replace process-local business/payment state and OTP rate limiting with
-  PostgreSQL and Redis-backed controls.
+- The core payment order, webhook, ledger, and outbox path has PostgreSQL support.
+  Beneficiaries, KYC, cards, rewards, support, admin audit, OTP limits, and other
+  business domains remain process-local and must move to durable stores.
 - Run the Cashfree Payouts adapter against your sandbox account, validate
   beneficiary-field mapping and final-status semantics, then enable production
   credentials only after the account's approved workflow is confirmed.
@@ -162,9 +171,9 @@ npm test   # node --test — runs the limits engine suite
   in-memory session store when `REDIS_URL` is unset.
 - The Flutter API client refreshes once on 401 and clears the local session if
   refresh fails. Logout revokes the refresh token.
-- Business/payment records and payout jobs are still in-memory; this API is not
-  safe for live-money traffic. PostgreSQL persistence, durable payout
-  processing/reconciliation, individual admin identity/audit, and sandbox
+- Several business domains and payout execution remain in-memory; this API is not
+  safe for live-money traffic. A durable payout worker/reconciliation, persistent
+  beneficiary data and encryption, individual admin identity/audit, and sandbox
   verification of provider mappings remain release blockers.
 
 
