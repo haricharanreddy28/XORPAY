@@ -11,7 +11,7 @@
 import express from "express";
 import crypto from "node:crypto";
 
-import { makeToken, requireAuth } from "./src/auth.js";
+import { createSession, rotateSession, revokeSession, connectAuthStore, requireAuth } from "./src/auth.js";
 import { sendVerification, checkVerification } from "./src/auth/twilioVerify.js";
 import { orders, getKyc, getSpend } from "./src/store.js";
 import { kycRoutes } from "./src/kyc/kycRoutes.js";
@@ -37,6 +37,8 @@ import {
 } from "./src/store.js";
 import { enqueuePayout } from "./src/payouts/payoutQueue.js";
 import { tierForKyc, evaluate } from "./src/limits/limitsEngine.js";
+import { normalizePhone, pilotMode, pilotAllowedPhones, pilotCaps, pilotAccessAllowed, pilotCategoryAllowed } from "./src/config/pilot.js";
+import { getBeneficiary } from "./src/store.js";
 
 const {
   CASHFREE_APP_ID,
@@ -45,7 +47,17 @@ const {
   PORT = 8080,
 } = process.env;
 
+if (process.env.NODE_ENV === "production" || CASHFREE_ENV.toUpperCase() === "PRODUCTION") {
+  throw new Error(
+    "Production mode is disabled until PostgreSQL persistence, durable payouts, " +
+      "production admin authentication, and payment reconciliation are wired.",
+  );
+}
+
 const cashfreeConfigured = !!(CASHFREE_APP_ID && CASHFREE_SECRET_KEY);
+if (pilotMode && pilotAllowedPhones.size === 0) {
+  console.warn("[pilot] PILOT_MODE is enabled with an empty allowlist; all login attempts will be denied.");
+}
 if (!cashfreeConfigured) {
   console.warn(
     "[warn] CASHFREE_APP_ID/SECRET not set — payment routes return 503. " +
@@ -75,15 +87,6 @@ app.use(
 );
 
 // --- OTP authentication (Twilio Verify by default) -----------------------
-function normalizePhone(value) {
-  if (typeof value !== "string") return null;
-  const phone = value.trim().replace(/[\s().-]/g, "");
-  if (/^[6-9]\d{9}$/.test(phone)) return `+91${phone}`;
-  if (/^91[6-9]\d{9}$/.test(phone)) return `+${phone}`;
-  if (/^\+[1-9]\d{7,14}$/.test(phone)) return phone;
-  return null;
-}
-
 const otpProvider = process.env.OTP_PROVIDER || "twilio";
 const otpStubCode = process.env.OTP_STUB_CODE || "123456";
 if (otpProvider === "stub" && process.env.NODE_ENV === "production") {
@@ -96,6 +99,7 @@ const OTP_MAX_PER_HOUR = 5;
 app.post("/auth/otp/request", async (req, res) => {
   const phone = normalizePhone(req.body?.phone);
   if (!phone) return res.status(400).json({ error: "invalid_phone" });
+  if (!pilotAccessAllowed(phone)) return res.status(403).json({ error: "pilot_access_required" });
 
   const key = `${req.ip}:${phone}`;
   const now = Date.now();
@@ -133,6 +137,7 @@ app.post("/auth/otp/verify", async (req, res) => {
   const phone = normalizePhone(req.body?.phone);
   const otp = req.body?.otp;
   if (!phone) return res.status(400).json({ error: "invalid_phone" });
+  if (!pilotAccessAllowed(phone)) return res.status(403).json({ error: "pilot_access_required" });
   if (typeof otp !== "string" || !/^\d{4,10}$/.test(otp)) {
     return res.status(400).json({ error: "invalid_otp" });
   }
@@ -147,7 +152,7 @@ app.post("/auth/otp/verify", async (req, res) => {
       return res.status(503).json({ error: "otp_provider_not_supported" });
     }
     if (!approved) return res.status(401).json({ error: "bad_otp" });
-    res.json({ access_token: makeToken(phone), refresh_token: null });
+    res.json(await createSession(phone));
   } catch (error) {
     const status = error?.status === 503 ? 503 : 502;
     console.error("[otp] verification check failed", status);
@@ -194,7 +199,6 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
   const {
     amount,
     currency = "INR",
-    beneficiaryVerified = true,
     beneficiaryId = null,
     category = null,
   } = req.body || {};
@@ -202,7 +206,19 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
     return res.status(400).json({ error: "invalid_amount" });
   }
 
-  // Server-side limits enforcement (never trust the client).
+  if (!pilotCategoryAllowed(category)) {
+    return res.status(403).json({ error: "category_disabled" });
+  }
+  const beneficiary = beneficiaryId ? getBeneficiary(req.phone, beneficiaryId) : null;
+  const needsBeneficiary = ["vendor", "rent"].includes(String(category || "").toLowerCase());
+  if (needsBeneficiary && !beneficiary) {
+    return res.status(400).json({ error: "verified_beneficiary_required" });
+  }
+  if (needsBeneficiary && !beneficiary.verified) {
+    return res.status(403).json({ error: "beneficiary_not_verified" });
+  }
+
+  // Server-side limits enforcement (never trust client-supplied KYC or payee status).
   const kyc = getKyc(req.phone);
   const { spentTodayMinor, spentMonthMinor } = getSpend(req.phone);
   const decision = evaluate({
@@ -210,7 +226,8 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
     amountMinor: amount,
     spentTodayMinor,
     spentMonthMinor,
-    beneficiaryVerified,
+    beneficiaryVerified: beneficiary ? Boolean(beneficiary.verified) : true,
+    caps: pilotMode ? pilotCaps : null,
   });
   if (!decision.allowed) {
     return res.status(403).json({ error: "limit_exceeded", reason: decision.reason });
@@ -239,10 +256,10 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
     });
     const data = await r.json();
     if (!r.ok || !data.payment_session_id) {
-      console.error("[cashfree create]", r.status, data);
-      return res.status(502).json({ error: "psp_unavailable", detail: data });
+      console.error("[cashfree create] failed", r.status);
+      return res.status(502).json({ error: "psp_unavailable" });
     }
-    orders.set(orderId, { amountMinor: amount, phone: req.phone, status: "CREATED" });
+    orders.set(orderId, { amountMinor: amount, phone: req.phone, status: "CREATED", beneficiaryId });
     createTransaction({
       id: orderId,
       phone: req.phone,
@@ -306,7 +323,8 @@ app.post("/payments/confirm", requireAuth, requireCashfree, async (req, res) => 
     const data = await r.json();
     const status = (data.order_status || "").toUpperCase();
     record.status = status;
-    if (status === "PAID") markPaid(order_id);
+    // The client may observe provider status, but only the signature-verified
+    // webhook is allowed to post the ledger or enqueue the payout.
     res.json({ order_id, status, amount: record.amountMinor });
   } catch (e) {
     console.error("[cashfree get] threw", e);
@@ -323,7 +341,9 @@ app.post("/webhooks/cashfree", (req, res) => {
     .update(String(timestamp) + (req.rawBody?.toString("utf8") ?? ""))
     .digest("base64");
 
-  if (!signature || signature !== expected) {
+  const receivedSignature = Buffer.from(String(signature || ""), "base64");
+  const expectedSignature = Buffer.from(expected, "base64");
+  if (!timestamp || receivedSignature.length !== expectedSignature.length || !crypto.timingSafeEqual(receivedSignature, expectedSignature)) {
     console.warn("[webhook] signature mismatch — rejecting");
     return res.status(401).json({ error: "bad_signature" });
   }
@@ -345,7 +365,37 @@ app.get("/health", (_req, res) =>
   res.json({ ok: true, env: CASHFREE_ENV, payments: cashfreeConfigured })
 );
 
-app.listen(PORT, () => {
-  console.log(`xorpay api on :${PORT} (Cashfree ${CASHFREE_ENV})`);
-  console.log(`payments: ${cashfreeConfigured ? "enabled" : "disabled (no keys)"}`);
+app.post("/auth/session/refresh", async (req, res) => {
+  try {
+    const session = await rotateSession(req.body?.refresh_token);
+    if (!session) return res.status(401).json({ error: "invalid_refresh_token" });
+    res.json(session);
+  } catch (error) {
+    console.error("[auth] refresh failed", error?.code || "unknown");
+    res.status(503).json({ error: "session_store_unavailable" });
+  }
+});
+
+app.post("/auth/session/logout", async (req, res) => {
+  try {
+    await revokeSession(req.body?.refresh_token);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("[auth] logout failed", error?.code || "unknown");
+    res.status(503).json({ error: "session_store_unavailable" });
+  }
+});
+
+async function startServer() {
+  await connectAuthStore();
+  app.listen(PORT, () => {
+    console.log(`xorpay api on :${PORT} (Cashfree ${CASHFREE_ENV})`);
+    console.log(`payments: ${cashfreeConfigured ? "enabled" : "disabled (no keys)"}`);
+    console.log(`auth session store: ${process.env.REDIS_URL ? "Redis" : "in-memory development only"}`);
+  });
+}
+
+startServer().catch((error) => {
+  console.error("[startup] failed", error?.message || "unknown");
+  process.exitCode = 1;
 });
