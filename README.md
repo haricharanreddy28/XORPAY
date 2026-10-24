@@ -11,7 +11,7 @@ This is a **monorepo**.
 ```
 apps/
   mobile/        Flutter app (Android first, iOS ready)
-  admin/         Next.js admin & ops panel         [planned]
+  admin/         Next.js admin & ops panel (dashboard, KYC, recon)
 services/
   api/           Backend API                        (Cashfree sandbox test
                  server today; NestJS in Phase 4)

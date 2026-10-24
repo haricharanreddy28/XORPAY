@@ -21,6 +21,7 @@ import { transactionRoutes } from "./src/payments/transactionRoutes.js";
 import { invoiceRoutes } from "./src/invoices/invoiceRoutes.js";
 import { rewardsRoutes, referralRoutes } from "./src/rewards/rewardsRoutes.js";
 import { notificationRoutes } from "./src/notifications/notificationRoutes.js";
+import { adminRoutes } from "./src/admin/adminRoutes.js";
 import { computeCoins } from "./src/rewards/coins.js";
 import { awardCoins, listTransactions } from "./src/store.js";
 import { notify } from "./src/notifications/notifier.js";
@@ -103,6 +104,9 @@ app.use("/invoices", invoiceRoutes());
 app.use("/rewards", rewardsRoutes());
 app.use("/referrals", referralRoutes());
 app.use("/notifications", notificationRoutes());
+
+// --- admin & ops ---------------------------------------------------------
+app.use("/admin", adminRoutes());
 
 // --- payments ------------------------------------------------------------
 function requireCashfree(_req, res, next) {

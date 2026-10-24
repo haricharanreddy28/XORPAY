@@ -60,3 +60,19 @@ jobs:
       - run: node --check server.js
       # Unit tests (limits engine etc.) — pure modules, no keys needed.
       - run: npm test
+
+  admin:
+    name: Admin build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/admin
+    env:
+      NEXT_PUBLIC_API_BASE_URL: "https://api.example.com"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: npm run build

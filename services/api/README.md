@@ -61,6 +61,8 @@ flutter run \
 | `GET /rewards` | coins balance + history |
 | `GET /referrals` · `POST /referrals/redeem` | referral code; redeem (rewards both) |
 | `GET /notifications` · `POST /notifications/:id/read` | notification centre |
+| `GET /admin/metrics` · `/admin/transactions` · `/admin/reconciliation` | ops KPIs / ledger (admin token) |
+| `GET /admin/kyc` · `POST /admin/kyc/:phone/decision` | KYC review queue + approve/reject |
 | `POST /webhooks/cashfree` | Cashfree's authoritative callback (set as notify URL) |
 | `GET /health` | liveness (`payments` flag shows if Cashfree is configured) |
 

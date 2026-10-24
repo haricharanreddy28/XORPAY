@@ -91,6 +91,11 @@ export function updateKyc(phone, patch) {
   return next;
 }
 
+/** Admin: every KYC record, with its phone. */
+export function allKyc() {
+  return [...kyc.entries()].map(([phone, v]) => ({ phone, ...v }));
+}
+
 /**
  * Spend so far for a user. Still 0 here; a proper rollup from PAID/SUCCESS
  * transactions lands with the Postgres migration (Phase 4+).
@@ -111,6 +116,11 @@ export function listTransactions(phone) {
   return [...transactions.values()]
     .filter((t) => t.phone === phone)
     .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/** Admin: every transaction. */
+export function allTransactions() {
+  return [...transactions.values()].sort((a, b) => b.createdAt - a.createdAt);
 }
 
 // --- invoices (GST Hub) --------------------------------------------------
