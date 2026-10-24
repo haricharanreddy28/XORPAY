@@ -1,8 +1,7 @@
 # Xorpay test backend (Cashfree sandbox)
 
 Minimal Node/Express server so you can run a **real Cashfree checkout with test
-money** and phone verification through Twilio Verify. In-memory auth/payment state — **not
-production**.
+money** and phone verification through Twilio Verify. Refresh sessions use Redis when configured; transaction and business state remain in-memory — **not production**.
 
 ## 1. Get sandbox keys
 1. merchant.cashfree.com → Developers → API Keys → **Sandbox** → copy App ID + Secret Key.
@@ -46,7 +45,9 @@ flutter run \
 | Route | Purpose |
 |---|---|
 | `POST /auth/otp/request` | send an SMS through Twilio Verify |
-| `POST /auth/otp/verify` | verify the code through Twilio Verify; returns a test token |
+| `POST /auth/otp/verify` | verify the code; returns a signed 15-minute access JWT and rotating refresh token |
+| `POST /auth/session/refresh` | rotate a one-time refresh token (Redis in deployment) |
+| `POST /auth/session/logout` | revoke a refresh token
 | `POST /kyc/pan` | verify PAN (provider) |
 | `POST /kyc/gstin` | verify GSTIN → higher tier |
 | `POST /kyc/aadhaar/init` · `/aadhaar/complete` | DigiLocker/OKYC start + finish |
@@ -143,3 +144,17 @@ npm test   # node --test — runs the limits engine suite
 - Move secret key to a secrets manager; never commit it.
 - Switch keys + `CASHFREE_ENV=PRODUCTION` only after business KYC is approved;
   first live test with ₹1, then refund.
+
+
+## Pilot auth foundation
+- Access tokens are HMAC-SHA256 signed JWTs with a 15-minute lifetime. Set a
+  unique `JWT_SECRET` of at least 32 bytes in the secret manager.
+- Refresh tokens are random, stored only as SHA-256 hashes, expire after 30
+  days, and rotate atomically via Redis. Local non-production runs may use an
+  in-memory session store when `REDIS_URL` is unset.
+- The Flutter API client refreshes once on 401 and clears the local session if
+  refresh fails. Logout revokes the refresh token.
+- Business/payment records are still in-memory; this auth slice does not make
+  the API safe for live-money traffic. PostgreSQL persistence, durable payout
+  processing, individual admin identity/audit, and provider production wiring
+  remain release blockers.
