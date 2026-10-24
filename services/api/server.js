@@ -253,7 +253,7 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
 
   try {
     if (databaseConfigured()) {
-      await persistPayment({ id: orderId, phone: req.phone, beneficiaryId, category, currency, fee });
+      await persistPayment({ id: orderId, phone: req.phone, beneficiaryId, category, currency, fee, limits: decision.limits });
     }
     const r = await fetch(`${CF_BASE}/orders`, {
       method: "POST",
@@ -297,6 +297,12 @@ app.post("/payments/orders", requireAuth, requireCashfree, async (req, res) => {
     if (databaseConfigured()) {
       try { await failPaymentBeforeCollection(orderId, "provider_unavailable"); } catch {}
     }
+    const limitErrors = {
+      PILOT_PER_TRANSACTION_LIMIT: "per_transaction_limit",
+      PILOT_DAILY_LIMIT: "daily_limit",
+      PILOT_MONTHLY_LIMIT: "monthly_limit",
+    };
+    if (limitErrors[e?.code]) return res.status(403).json({ error: "limit_exceeded", reason: limitErrors[e.code] });
     console.error("[cashfree create] threw", e?.code || "unknown");
     res.status(502).json({ error: "psp_unavailable" });
   }
