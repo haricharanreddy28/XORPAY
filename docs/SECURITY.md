@@ -22,8 +22,9 @@ environment/process steps; **[wire]** are integration points left stubbed.
 - **[code]** Limits enforced server-side before order creation.
 - **[code]** Double-entry ledger; payout settlement is idempotent.
 - **[code]** Maker-checker for refunds (different approver required).
-- **[ops]** Replace dev tokens: real user auth (JWT + device binding) and admin
-  accounts with RBAC; rotate `ADMIN_TOKENS`.
+- **[code]** Signed 15-minute access JWTs; Redis-backed rotating refresh tokens
+  with logout revocation. **[ops]** Add device binding and individual admin
+  accounts with MFA, RBAC, and durable audit records.
 - **[ops]** Move all secrets to a secrets manager; never in the repo.
 - **[ops]** Move OTP/payment/beneficiary rate limits from process memory to Redis; add velocity /
   fraud rules (round-tripping, self-payments, shared beneficiaries).
