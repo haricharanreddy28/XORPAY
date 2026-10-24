@@ -11,7 +11,6 @@ const ISSUER = "xorpay-api";
 const AUDIENCE = "xorpay-mobile";
 const ACCESS_TTL_SECONDS = 15 * 60;
 const REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60;
-const DEV_REFRESH_PREFIX = "dev:";
 const devRefreshSessions = new Map();
 let redisClient = null;
 
