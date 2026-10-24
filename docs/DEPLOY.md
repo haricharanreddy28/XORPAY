@@ -3,9 +3,10 @@
 Two things get deployed: the **backend** (an HTTPS server holding your Cashfree
 secret key) and the **Flutter app** (a signed build users install).
 
-> ⚠️ Gate first: the `backend/` server is a **test** server (in-memory store,
-> stubbed OTP, base64 tokens). Do the hardening in **Part 0** before deploying
-> it for real money. For a sandbox demo you can deploy it as-is.
+> ⚠️ Gate first: the API remains a sandbox service. It now has signed access
+> JWTs and rotating Redis refresh sessions, but business/payment records remain
+> in process memory. The API refuses `CASHFREE_ENV=PRODUCTION` until PostgreSQL,
+> durable payouts, production admin identity, and reconciliation are implemented.
 
 ---
 
@@ -19,42 +20,13 @@ secret key) and the **Flutter app** (a signed build users install).
 
 ---
 
-## Part A — Deploy the backend (example: Render)
+## Part A — AWS Mumbai pilot deployment
 
-Any Node host works (Render, Railway, Fly.io, a VPS). Render is the simplest.
-
-1. **Push to GitHub**
-   ```bash
-   cd backend
-   git init && git add . && git commit -m "xorpay backend"
-   # create a repo on github.com, then:
-   git remote add origin https://github.com/you/xorpay-backend.git
-   git push -u origin main
-   ```
-   (Confirm `.env` and any keys are git-ignored. Never commit secrets.)
-
-2. **Create the service on render.com**
-   - New → **Web Service** → connect the repo.
-   - Root directory: `backend` (if the repo is the whole project) or `.`
-   - Build command: `npm install`
-   - Start command: `node server.js`
-   - Instance: free/starter is fine to start.
-
-3. **Set environment variables** (Render dashboard → Environment):
-   | Key | Value |
-   |---|---|
-   | `CASHFREE_APP_ID` | your sandbox (or production) App ID |
-   | `CASHFREE_SECRET_KEY` | matching Secret Key |
-   | `CASHFREE_ENV` | `SANDBOX` or `PRODUCTION` |
-
-4. **Deploy.** You get a URL like `https://xorpay-backend.onrender.com`.
-   Check `GET /health` returns `{"ok":true}`.
-
-5. **Register the webhook in Cashfree**
-   Dashboard → Developers → Webhooks → add
-   `https://xorpay-backend.onrender.com/webhooks/cashfree`.
-
----
+The target is AWS `ap-south-1`. The planned stack uses private application
+subnets, encrypted PostgreSQL and Redis, Secrets Manager, CloudWatch, and HTTPS
+ingress. Provisioning is deferred until the application data layer and pilot
+release gates are implemented. Do not point live Cashfree credentials at the
+current in-memory API.
 
 ## Part B — Build & release the Flutter app
 
