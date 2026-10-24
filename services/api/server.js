@@ -37,7 +37,7 @@ import {
 } from "./src/store.js";
 import { enqueuePayout } from "./src/payouts/payoutQueue.js";
 import { tierForKyc, evaluate } from "./src/limits/limitsEngine.js";
-import { normalizePhone, pilotMode, pilotAllowedPhones, pilotAllowedCategories, pilotCaps, pilotAccessAllowed, pilotCategoryAllowed } from "./src/config/pilot.js";
+import { normalizePhone, pilotMode, pilotAllowedPhones, pilotCaps, pilotAccessAllowed, pilotCategoryAllowed } from "./src/config/pilot.js";
 import { getBeneficiary } from "./src/store.js";
 
 const {
@@ -323,7 +323,8 @@ app.post("/payments/confirm", requireAuth, requireCashfree, async (req, res) => 
     const data = await r.json();
     const status = (data.order_status || "").toUpperCase();
     record.status = status;
-    // The client may observe provider status, but only the signature-verified\n    // webhook is allowed to post the ledger or enqueue the payout.
+    // The client may observe provider status, but only the signature-verified
+    // webhook is allowed to post the ledger or enqueue the payout.
     res.json({ order_id, status, amount: record.amountMinor });
   } catch (e) {
     console.error("[cashfree get] threw", e);
