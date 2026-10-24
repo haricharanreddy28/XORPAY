@@ -3,6 +3,7 @@ import 'package:xorpay_ui/xorpay_ui.dart';
 
 import '../beneficiaries/add_beneficiary_screen.dart';
 import '../beneficiaries/beneficiary_service.dart';
+import 'pay_target.dart';
 import 'payment_flow_screen.dart';
 
 /// Vendor/supplier payment (spec §3.4.1): pick a payee, then the shared flow.
@@ -25,8 +26,7 @@ class _VendorPayScreenState extends State<VendorPayScreen> {
   void _pay(Beneficiary b) {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => PaymentFlowScreen(
-        payee: b,
-        category: 'vendor',
+        target: PayTarget.payee(b, category: 'vendor'),
         title: 'Pay vendor',
         purpose: 'Vendor payment',
       ),

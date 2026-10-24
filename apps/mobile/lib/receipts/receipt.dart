@@ -4,7 +4,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:xorpay_ui/xorpay_ui.dart';
 
-import '../beneficiaries/beneficiary_service.dart';
 import '../payments/payment_service.dart';
 
 /// Payment result screen with a status timeline and a branded PDF receipt
@@ -15,14 +14,14 @@ class ReceiptScreen extends StatelessWidget {
     super.key,
     required this.result,
     required this.order,
-    required this.payee,
+    required this.payeeName,
     required this.category,
     required this.payeeAmount,
   });
 
   final PaymentResult result;
   final OrderHandle order;
-  final Beneficiary payee;
+  final String payeeName;
   final String category;
   final double payeeAmount; // rupees
 
@@ -41,7 +40,7 @@ class ReceiptScreen extends StatelessWidget {
       TimelineStep('Processing payout',
           done: result.status == PaymentStatus.success,
           active: result.status != PaymentStatus.success),
-      TimelineStep('Credited to ${payee.displayName}',
+      TimelineStep('Credited to $payeeName',
           active: false, sub: result.status == PaymentStatus.success ? null : 'Usually within 2 hours'),
     ];
 
@@ -59,7 +58,7 @@ class ReceiptScreen extends StatelessWidget {
                   const SizedBox(height: XSpacing.md),
                   Text(XMoney.format(payeeAmount),
                       style: XType.amount(40).copyWith(color: xc.textPrimary)),
-                  Text('to ${payee.displayName}',
+                  Text('to $payeeName',
                       style: XType.body.copyWith(color: xc.textSecondary)),
                 ],
               ),
@@ -118,7 +117,7 @@ class ReceiptScreen extends StatelessWidget {
             pw.SizedBox(height: 16),
             _pdfRow('Amount to payee', _money(payeeAmount)),
             _pdfRow('You paid', _money(youPay)),
-            _pdfRow('Payee', payee.displayName),
+            _pdfRow('Payee', payeeName),
             _pdfRow('Category', category),
             _pdfRow('Reference', order.orderId),
             _pdfRow('Status', result.status.name),

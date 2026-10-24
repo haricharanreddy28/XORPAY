@@ -3,6 +3,7 @@ import 'package:xorpay_ui/xorpay_ui.dart';
 
 import '../beneficiaries/add_beneficiary_screen.dart';
 import '../beneficiaries/beneficiary_service.dart';
+import 'pay_target.dart';
 import 'payment_flow_screen.dart';
 
 /// Rent payment (spec §3.4.2): pick rent type + landlord (a beneficiary), then
@@ -84,8 +85,7 @@ class _RentPayScreenState extends State<RentPayScreen> {
     if (landlord == null) return;
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => PaymentFlowScreen(
-        payee: landlord,
-        category: 'rent',
+        target: PayTarget.payee(landlord, category: 'rent'),
         title: '${_type.label} rent',
         purpose: '${_type.label} rent',
       ),

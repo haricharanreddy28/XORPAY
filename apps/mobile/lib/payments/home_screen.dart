@@ -7,6 +7,8 @@ import '../beneficiaries/beneficiaries_screen.dart';
 import '../business/business_profile_screen.dart';
 import '../cards/cards_screen.dart';
 import '../limits/limits_service.dart';
+import 'biller_pay_screens.dart';
+import 'card_bill_pay_screen.dart';
 import 'rent_pay_screen.dart';
 import 'transactions_screen.dart';
 import 'vendor_pay_screen.dart';
@@ -114,48 +116,63 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             _LimitsCard(future: _limits),
             const SizedBox(height: XSpacing.xl),
-            XButton(
-              label: 'Pay vendor',
-              icon: Icons.store_outlined,
-              onPressed: () => _push(const VendorPayScreen()),
-            ),
-            const SizedBox(height: XSpacing.md),
-            XButton.secondary(
-              label: 'Pay rent',
-              icon: Icons.home_outlined,
-              onPressed: () => _push(const RentPayScreen()),
-            ),
-            const SizedBox(height: XSpacing.md),
-            XButton.secondary(
-              label: 'Scan & Pay',
-              icon: Icons.qr_code_scanner,
-              onPressed: _scanAndPay,
-            ),
-            const SizedBox(height: XSpacing.md),
-            XButton.secondary(
-              label: 'Payees',
-              icon: Icons.group_outlined,
-              onPressed: _openPayees,
-            ),
-            const SizedBox(height: XSpacing.md),
-            XButton.secondary(
-              label: 'Cards',
-              icon: Icons.credit_card,
-              onPressed: _openCards,
+            CategoryGrid(items: [
+              CategoryItem(
+                  icon: Icons.store_outlined,
+                  label: 'Vendor',
+                  onTap: () => _push(const VendorPayScreen())),
+              CategoryItem(
+                  icon: Icons.home_outlined,
+                  label: 'Rent',
+                  onTap: () => _push(const RentPayScreen())),
+              CategoryItem(
+                  icon: Icons.receipt_long_outlined,
+                  label: 'GST',
+                  onTap: () => _push(const GstPayScreen())),
+              CategoryItem(
+                  icon: Icons.school_outlined,
+                  label: 'Education',
+                  onTap: () => _push(const EducationPayScreen())),
+              CategoryItem(
+                  icon: Icons.account_balance_outlined,
+                  label: 'Taxes',
+                  onTap: () => _push(const TaxPayScreen())),
+              CategoryItem(
+                  icon: Icons.credit_score_outlined,
+                  label: 'Card bill',
+                  onTap: () => _push(const CardBillPayScreen())),
+              CategoryItem(
+                  icon: Icons.qr_code_scanner,
+                  label: 'Scan & Pay',
+                  onTap: _scanAndPay),
+              CategoryItem(
+                  icon: Icons.group_outlined,
+                  label: 'Payees',
+                  onTap: _openPayees),
+            ]),
+            const SizedBox(height: XSpacing.xl),
+            Row(
+              children: [
+                Expanded(
+                  child: XButton.secondary(
+                      label: 'Cards', icon: Icons.credit_card, onPressed: _openCards),
+                ),
+                const SizedBox(width: XSpacing.md),
+                Expanded(
+                  child: XButton.secondary(
+                      label: 'History',
+                      icon: Icons.history,
+                      onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const TransactionsScreen()),
+                          )),
+                ),
+              ],
             ),
             const SizedBox(height: XSpacing.md),
             XButton.secondary(
               label: 'Add GST details',
               icon: Icons.business_center_outlined,
               onPressed: _openBusinessProfile,
-            ),
-            const SizedBox(height: XSpacing.md),
-            XButton.secondary(
-              label: 'Transactions',
-              icon: Icons.history,
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const TransactionsScreen()),
-              ),
             ),
           ],
         ),
