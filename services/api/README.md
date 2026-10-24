@@ -138,13 +138,16 @@ npm test   # node --test — runs the limits engine suite
 ```
 
 ## Before production (do not skip)
-- Move OTP rate limiting to Redis and add device binding.
-- Replace the in-memory `orders` Map with a database; add idempotency keys.
-- Register the webhook URL in the Cashfree dashboard and rely on it for "paid".
-- Move secret key to a secrets manager; never commit it.
-- Switch keys + `CASHFREE_ENV=PRODUCTION` only after business KYC is approved;
-  first live test with ₹1, then refund.
-
+- The API refuses to start with `NODE_ENV=production` or
+  `CASHFREE_ENV=PRODUCTION` until persistence, payouts, admin auth, and
+  reconciliation are completed.
+- Replace process-local business/payment state and OTP rate limiting with
+  PostgreSQL and Redis-backed controls.
+- Wire production Cashfree Payouts, KYC, invoice/GSP and notification providers.
+- Configure TLS, monitoring, audit trails, legal disclosures, and an allowlist
+  before the real-money pilot.
+- Store all credentials only in AWS Secrets Manager; rotate any credentials
+  that were pasted into chat or committed by mistake.
 
 ## Pilot auth foundation
 - Access tokens are HMAC-SHA256 signed JWTs with a 15-minute lifetime. Set a
