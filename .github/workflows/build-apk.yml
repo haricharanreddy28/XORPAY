@@ -1,11 +1,14 @@
 name: Build APK
 
-# Runs when this workflow file changes (so it builds now), or on demand.
+# Build a fresh installable test APK for mobile/design-system changes, or on demand.
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - ".github/workflows/build-apk.yml"
+      - "apps/mobile/**"
+      - "packages/xorpay_ui/**"
 
 jobs:
   apk:
