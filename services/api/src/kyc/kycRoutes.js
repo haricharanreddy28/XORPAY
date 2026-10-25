@@ -23,7 +23,8 @@ export function kycRoutes() {
       }
       res.json(r);
     } catch (e) {
-      res.status(502).json({ error: "kyc_provider_error" });
+      console.error("[kyc pan]", e?.status, JSON.stringify(e?.detail) || e?.message);
+      res.status(502).json({ error: "kyc_provider_error", status: e?.status ?? null, detail: e?.detail ?? e?.message ?? null });
     }
   });
 
@@ -41,7 +42,8 @@ export function kycRoutes() {
       }
       res.json(r);
     } catch (e) {
-      res.status(502).json({ error: "kyc_provider_error" });
+      console.error("[kyc gstin]", e?.status, JSON.stringify(e?.detail) || e?.message);
+      res.status(502).json({ error: "kyc_provider_error", status: e?.status ?? null, detail: e?.detail ?? e?.message ?? null });
     }
   });
 
