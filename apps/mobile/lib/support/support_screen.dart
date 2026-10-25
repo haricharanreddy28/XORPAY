@@ -28,7 +28,9 @@ class _SupportScreenState extends State<SupportScreen> {
     _reload();
   }
 
-  void _reload() => setState(() => _tickets = SupportService.instance.list());
+  void _reload() => setState(() {
+        _tickets = SupportService.instance.list();
+      });
 
   Future<void> _raise() async {
     final created = await showModalBottomSheet<bool>(

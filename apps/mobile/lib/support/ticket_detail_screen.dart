@@ -35,7 +35,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     try {
       final updated = await SupportService.instance.reply(widget.id, _reply.text.trim());
       _reply.clear();
-      setState(() => _ticket = Future.value(updated));
+      setState(() {
+        _ticket = Future.value(updated);
+      });
     } finally {
       if (mounted) setState(() => _busy = false);
     }

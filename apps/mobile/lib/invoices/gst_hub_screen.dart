@@ -29,7 +29,9 @@ class _GstHubScreenState extends State<GstHubScreen> {
   }
 
   void _reload() {
-    setState(() => _invoices = InvoiceService.instance.list());
+    setState(() {
+      _invoices = InvoiceService.instance.list();
+    });
   }
 
   Future<void> _import() async {

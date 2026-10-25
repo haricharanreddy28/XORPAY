@@ -22,7 +22,9 @@ class _CardsScreenState extends State<CardsScreen> {
   }
 
   void _reload() {
-    setState(() => _cards = CardService.instance.list());
+    setState(() {
+      _cards = CardService.instance.list();
+    });
   }
 
   Future<void> _addCard() async {

@@ -37,7 +37,9 @@ class _ReferralScreenState extends State<ReferralScreen> {
     try {
       final coins = await RewardsService.instance.redeem(code);
       messenger.showSnackBar(SnackBar(content: Text('You earned $coins coins!')));
-      setState(() => _referral = RewardsService.instance.getReferral());
+      setState(() {
+        _referral = RewardsService.instance.getReferral();
+      });
       _codeInput.clear();
     } catch (_) {
       messenger.showSnackBar(

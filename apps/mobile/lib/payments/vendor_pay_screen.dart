@@ -38,7 +38,9 @@ class _VendorPayScreenState extends State<VendorPayScreen> {
       MaterialPageRoute(builder: (_) => const AddBeneficiaryScreen()),
     );
     if (added == true) {
-      setState(() => _payees = BeneficiaryService.instance.list());
+      setState(() {
+        _payees = BeneficiaryService.instance.list();
+      });
     }
   }
 

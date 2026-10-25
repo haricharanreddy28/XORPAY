@@ -23,7 +23,9 @@ class _BeneficiariesScreenState extends State<BeneficiariesScreen> {
   }
 
   void _reload() {
-    setState(() => _payees = BeneficiaryService.instance.list());
+    setState(() {
+      _payees = BeneficiaryService.instance.list();
+    });
   }
 
   Future<void> _add() async {

@@ -44,7 +44,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _refreshLimits() {
-    setState(() => _limits = LimitsService.instance.fetch());
+    setState(() {
+      _limits = LimitsService.instance.fetch();
+    });
   }
 
   void _refreshHeader() {

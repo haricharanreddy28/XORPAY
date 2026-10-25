@@ -25,7 +25,9 @@ class _StatementsScreenState extends State<StatementsScreen> {
   }
 
   void _run() {
-    setState(() => _rows = AccountService.instance.statements(from: _from, to: _to));
+    setState(() {
+      _rows = AccountService.instance.statements(from: _from, to: _to);
+    });
   }
 
   Future<void> _pick(bool isFrom) async {

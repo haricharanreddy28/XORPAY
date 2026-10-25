@@ -21,7 +21,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _reload() {
-    setState(() => _feed = NotificationService.instance.list());
+    setState(() {
+      _feed = NotificationService.instance.list();
+    });
   }
 
   Future<void> _open(AppNotification n) async {

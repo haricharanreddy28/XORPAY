@@ -21,7 +21,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     _reload();
   }
 
-  void _reload() => setState(() => _txns = TransactionService.instance.list());
+  void _reload() => setState(() {
+        _txns = TransactionService.instance.list();
+      });
 
   @override
   Widget build(BuildContext context) {

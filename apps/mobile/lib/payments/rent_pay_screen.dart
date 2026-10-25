@@ -58,7 +58,9 @@ class _RentPayScreenState extends State<RentPayScreen> {
                       MaterialPageRoute(builder: (_) => const AddBeneficiaryScreen()),
                     );
                     if (added == true) {
-                      setState(() => _payees = BeneficiaryService.instance.list());
+                      setState(() {
+                        _payees = BeneficiaryService.instance.list();
+                      });
                     }
                   },
                 ),

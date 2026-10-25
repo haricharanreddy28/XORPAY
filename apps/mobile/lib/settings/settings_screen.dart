@@ -26,12 +26,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _setNotifications(bool v) async {
     await AccountService.instance.updateSettings(notificationsEnabled: v);
-    setState(() => _account = AccountService.instance.get());
+    setState(() {
+      _account = AccountService.instance.get();
+    });
   }
 
   Future<void> _setLanguage(String lang) async {
     await AccountService.instance.updateSettings(language: lang);
-    setState(() => _account = AccountService.instance.get());
+    setState(() {
+      _account = AccountService.instance.get();
+    });
   }
 
   Future<void> _deleteAccount() async {
