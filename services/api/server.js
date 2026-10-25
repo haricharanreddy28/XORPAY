@@ -291,6 +291,14 @@ function markPaid(orderId) {
   enqueuePayout(orderId);
 }
 
+function markPaymentFailed(orderId, reason = "payment_failed") {
+  const txn = getTransaction(orderId);
+  if (!txn || !canTransition(txn.state, TxnState.FAILED)) return;
+  txn.state = TxnState.FAILED;
+  txn.failureReason = reason;
+  console.log(`[txn] ${orderId} -> FAILED (${reason})`);
+}
+
 // 2) Confirm: ask Cashfree for the real status (never trust the client).
 app.post("/payments/confirm", requireAuth, requireCashfree, async (req, res) => {
   const { order_id } = req.body || {};
@@ -304,9 +312,53 @@ app.post("/payments/confirm", requireAuth, requireCashfree, async (req, res) => 
       headers: cfHeaders,
     });
     const data = await r.json();
-    const status = (data.order_status || "").toUpperCase();
+    if (!r.ok) {
+      console.error("[cashfree get order]", r.status, data);
+      return res.status(502).json({ error: "psp_unavailable" });
+    }
+
+    let status = (data.order_status || "").toUpperCase();
+    if (status !== "PAID") {
+      // Cashfree orders can remain ACTIVE after a failed checkout attempt.
+      // Fetch attempts too; order status alone cannot distinguish that from
+      // a payment that is still being authorized.
+      const paymentsResponse = await fetch(
+        `${CF_BASE}/orders/${order_id}/payments`,
+        { method: "GET", headers: cfHeaders },
+      );
+      const attempts = await paymentsResponse.json();
+      if (!paymentsResponse.ok) {
+        console.error("[cashfree get payments]", paymentsResponse.status, attempts);
+        return res.status(502).json({ error: "psp_unavailable" });
+      }
+      const list = Array.isArray(attempts)
+        ? attempts
+        : Array.isArray(attempts?.data)
+          ? attempts.data
+          : [];
+      const attemptStatuses = list.map((p) =>
+        String(p.payment_status || "").toUpperCase(),
+      );
+      if (attemptStatuses.includes("SUCCESS")) {
+        status = "PAID";
+      } else if (attemptStatuses.includes("PENDING")) {
+        status = "PENDING";
+      } else if (
+        list.length > 0 &&
+        attemptStatuses.every((s) => ["FAILED", "USER_DROPPED"].includes(s))
+      ) {
+        status = "FAILED";
+      } else if (["EXPIRED", "TERMINATED"].includes(status)) {
+        // Keep the terminal Cashfree order state when no successful or
+        // pending payment attempt overrides it.
+      }
+    }
+
     record.status = status;
     if (status === "PAID") markPaid(order_id);
+    else if (["FAILED", "EXPIRED", "TERMINATED"].includes(status)) {
+      markPaymentFailed(order_id, status.toLowerCase());
+    }
     res.json({ order_id, status, amount: record.amountMinor });
   } catch (e) {
     console.error("[cashfree get] threw", e);

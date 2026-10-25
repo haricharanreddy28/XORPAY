@@ -123,7 +123,7 @@ class PaymentService {
   /// SDK says the flow finished for [orderId] — confirm server-side.
   Future<void> _onVerify(String orderId) async {
     try {
-      final result = await confirmOrder(orderId);
+      final result = await _confirmAfterCheckout(orderId);
       _complete(result);
     } catch (e) {
       // UI finished but our confirm failed/timed out: treat as pending, not paid.
@@ -135,18 +135,51 @@ class PaymentService {
     }
   }
 
-  void _onError(CFErrorResponse error, String orderId) {
-    _complete(PaymentResult(
-      PaymentStatus.failed,
-      reference: orderId,
-      message: error.getMessage(),
-    ));
+  Future<void> _onError(CFErrorResponse error, String orderId) async {
+    // SDK errors aren't authoritative. The bank may have approved the payment
+    // even if checkout was interrupted, so reconcile with the server first.
+    try {
+      final result = await _confirmAfterCheckout(orderId);
+      if (result.status == PaymentStatus.success ||
+          result.status == PaymentStatus.pending) {
+        _complete(result);
+      } else {
+        _complete(PaymentResult(
+          PaymentStatus.failed,
+          reference: orderId,
+          message: result.message ?? error.getMessage(),
+        ));
+      }
+    } catch (_) {
+      _complete(PaymentResult(
+        PaymentStatus.pending,
+        reference: orderId,
+        message: 'Payment status is being confirmed. Check transactions shortly.',
+      ));
+    }
   }
 
   void _complete(PaymentResult r) {
     final c = _pending;
     if (c != null && !c.isCompleted) c.complete(r);
     _pending = null;
+  }
+
+  Future<PaymentResult> _confirmAfterCheckout(String orderId) async {
+    // Cashfree can report a short-lived pending/active state immediately
+    // after returning from the SDK. Poll the server briefly; it checks
+    // Cashfree's order and payment-attempt APIs on every request.
+    PaymentResult result = PaymentResult(
+      PaymentStatus.pending,
+      reference: orderId,
+      message: 'Payment status is being confirmed.',
+    );
+    for (var attempt = 0; attempt < 5; attempt++) {
+      result = await confirmOrder(orderId);
+      if (result.status != PaymentStatus.pending || attempt == 4) break;
+      await Future<void>.delayed(const Duration(seconds: 2));
+    }
+    return result;
   }
 
   /// Step 4–5: backend confirms the order's real status with Cashfree.
@@ -157,8 +190,9 @@ class PaymentService {
     final status = (res.data['status'] as String? ?? '').toUpperCase();
     final mapped = switch (status) {
       'PAID' || 'SUCCESS' => PaymentStatus.success,
-      'ACTIVE' || 'PENDING' => PaymentStatus.pending,
-      _ => PaymentStatus.failed,
+      'ACTIVE' || 'PENDING' || '' => PaymentStatus.pending,
+      'FAILED' || 'EXPIRED' || 'USER_DROPPED' => PaymentStatus.failed,
+      _ => PaymentStatus.pending,
     };
     return PaymentResult(mapped, reference: orderId, message: status);
   }

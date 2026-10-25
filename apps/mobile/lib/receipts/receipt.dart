@@ -31,18 +31,32 @@ class ReceiptScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final xc = context.xc;
-    final ok = result.status == PaymentStatus.success ||
-        result.status == PaymentStatus.pending;
+    final paid = result.status == PaymentStatus.success;
+    final pending = result.status == PaymentStatus.pending;
+    final statusColor = paid ? xc.success : pending ? xc.warning : xc.error;
     final youPay = _fee('youPayMinor', payeeAmount);
 
-    final steps = <TimelineStep>[
-      const TimelineStep('Paid', done: true, sub: 'Collected from your card'),
-      TimelineStep('Processing payout',
-          done: result.status == PaymentStatus.success,
-          active: result.status != PaymentStatus.success),
-      TimelineStep('Credited to $payeeName',
-          active: false, sub: result.status == PaymentStatus.success ? null : 'Usually within 2 hours'),
-    ];
+    final steps = paid
+        ? <TimelineStep>[
+            const TimelineStep('Payment confirmed', done: true,
+                sub: 'Collected from your card'),
+            const TimelineStep('Processing payout', active: true),
+            TimelineStep('Credited to $payeeName',
+                sub: 'Usually within 2 hours'),
+          ]
+        : pending
+            ? <TimelineStep>[
+                const TimelineStep('Confirming payment', active: true,
+                    sub: 'We are checking with Cashfree'),
+                const TimelineStep('Payout',
+                    sub: 'Starts after payment is confirmed'),
+                TimelineStep('Credited to $payeeName'),
+              ]
+            : <TimelineStep>[
+                const TimelineStep('Payment not completed', done: true),
+                const TimelineStep('Payout not started'),
+                const TimelineStep('Nothing sent to payee'),
+              ];
 
     return Scaffold(
       appBar: AppBar(title: const Text('Receipt'), automaticallyImplyLeading: false),
@@ -53,13 +67,32 @@ class ReceiptScreen extends StatelessWidget {
             Center(
               child: Column(
                 children: [
-                  Icon(ok ? Icons.check_circle : Icons.error,
-                      size: 72, color: ok ? xc.success : xc.error),
+                  Icon(
+                    paid
+                        ? Icons.check_circle
+                        : pending
+                            ? Icons.hourglass_top
+                            : Icons.error,
+                    size: 72,
+                    color: statusColor,
+                  ),
                   const SizedBox(height: XSpacing.md),
                   Text(XMoney.format(payeeAmount),
                       style: XType.amount(40).copyWith(color: xc.textPrimary)),
                   Text('to $payeeName',
                       style: XType.body.copyWith(color: xc.textSecondary)),
+                  const SizedBox(height: XSpacing.sm),
+                  Text(
+                    paid
+                        ? 'Payment confirmed'
+                        : pending
+                            ? 'Payment confirmation pending'
+                            : 'Payment failed',
+                    style: XType.body.copyWith(
+                      color: statusColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -122,7 +155,12 @@ class ReceiptScreen extends StatelessWidget {
             _pdfRow('Reference', order.orderId),
             _pdfRow('Status', result.status.name),
             pw.Spacer(),
-            pw.Text('Paid via XORPAY',
+            pw.Text(
+                result.status == PaymentStatus.success
+                    ? 'Payment confirmed via XORPAY'
+                    : result.status == PaymentStatus.pending
+                        ? 'Payment confirmation pending'
+                        : 'Payment not confirmed',
                 style: const pw.TextStyle(color: PdfColors.grey, fontSize: 10)),
           ],
         ),

@@ -104,6 +104,14 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         t.state == 'PAYOUT_QUEUED' || t.state == 'PAYOUT_PROCESSING';
 
     if (t.isFailed) {
+      if (!paid) {
+        return [
+          TimelineStep('Payment failed', done: true,
+              sub: t.failureReason ?? 'Cashfree did not confirm payment'),
+          const TimelineStep('Payout not started'),
+          const TimelineStep('Nothing sent to payee'),
+        ];
+      }
       return [
         TimelineStep('Paid', done: paid, sub: 'Collected from your card'),
         const TimelineStep('Payout failed', done: true),
@@ -115,8 +123,18 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       ];
     }
     return [
-      TimelineStep('Paid', done: paid, sub: 'Collected from your card'),
-      TimelineStep('Processing payout', done: t.isSuccess, active: processing),
+      TimelineStep(
+        paid ? 'Payment confirmed' : 'Confirming payment',
+        done: paid,
+        active: !paid,
+        sub: paid ? 'Collected from your card' : 'Awaiting Cashfree confirmation',
+      ),
+      TimelineStep(
+        paid ? 'Processing payout' : 'Payout',
+        done: t.isSuccess,
+        active: processing,
+        sub: paid ? null : 'Starts after payment is confirmed',
+      ),
       TimelineStep('Credited', done: t.isSuccess, active: false),
     ];
   }

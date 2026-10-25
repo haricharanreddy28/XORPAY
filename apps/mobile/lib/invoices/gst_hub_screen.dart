@@ -67,8 +67,7 @@ class _GstHubScreenState extends State<GstHubScreen> {
         metadata: {'invoiceIds': ids, 'withTds': _withTds},
       );
       final result = await PaymentService.instance.payWithOrder(order);
-      final paidOk = result.status == PaymentStatus.success ||
-          result.status == PaymentStatus.pending;
+      final paidOk = result.status == PaymentStatus.success;
       if (paidOk) await InvoiceService.instance.markPaid(ids, txnId: order.orderId);
       if (!mounted) return;
       final supplierNames =
