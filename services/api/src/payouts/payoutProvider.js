@@ -68,7 +68,12 @@ export class CashfreePayoutProvider {
 
   _map(res, data) {
     const s = (data?.status ?? "").toUpperCase();
-    const status = s === "SUCCESS" ? "SUCCESS" : s === "FAILED" || s === "REJECTED" ? "FAILED" : "PENDING";
+    const status =
+      s === "SUCCESS"
+        ? "SUCCESS"
+        : s === "FAILED" || s === "REJECTED" || s === "REVERSED"
+          ? "FAILED"
+          : "PENDING";
     return {
       status,
       utr: data?.transfer_utr ?? null,
@@ -96,6 +101,17 @@ export class CashfreePayoutProvider {
         }),
       });
       const data = await res.json().catch(() => ({}));
+      // Idempotent retry: Cashfree already accepted this transfer_id on a prior
+      // attempt ("Transfer Id already exists"). The money may be in-flight or
+      // already sent — DON'T fail/refund (that would double-spend). Fetch the
+      // real status of the existing transfer and report that instead.
+      const already =
+        res.status === 409 ||
+        /already\s*exist/i.test(data?.message ?? "") ||
+        /exist/i.test(data?.code ?? "");
+      if (already) {
+        return await this.getPayoutStatus(reference);
+      }
       return this._map(res, data);
     } catch {
       return { status: "FAILED", permanent: false, failureReason: "network_error" };
@@ -103,12 +119,17 @@ export class CashfreePayoutProvider {
   }
 
   async getPayoutStatus(reference) {
-    const res = await fetch(
-      `${this.baseUrl}/transfers?transfer_id=${encodeURIComponent(reference)}`,
-      { headers: this._headers },
-    );
-    const data = await res.json().catch(() => ({}));
-    return { status: (data?.status ?? "PENDING").toUpperCase(), utr: data?.transfer_utr ?? null };
+    try {
+      const res = await fetch(
+        `${this.baseUrl}/transfers?transfer_id=${encodeURIComponent(reference)}`,
+        { headers: this._headers },
+      );
+      const data = await res.json().catch(() => ({}));
+      return this._map(res, data);
+    } catch {
+      // Transient lookup failure — keep it retryable, never refund on this.
+      return { status: "PENDING", permanent: false, failureReason: "status_lookup_error" };
+    }
   }
 }
 
