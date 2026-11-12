@@ -237,6 +237,8 @@ p{margin:0}
 .due .amt{text-align:right;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
 .due .amt span{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:2px}
 .due .amt .soon-t{color:var(--warn)}
+.due .rm{width:30px;height:30px;border-radius:9px;flex:none;opacity:.55}
+.due .rm:hover{opacity:1;color:var(--err);border-color:#F3C1BE}
 .bp .st-ic{width:24px;height:24px;border-radius:50%;border:2px solid var(--line-2);display:grid;place-items:center;flex:none}
 .bp .st-ic svg{width:13px;height:13px;color:#fff;opacity:0}
 .bp.ok .st-ic{background:var(--ok);border-color:var(--ok)}
@@ -614,7 +616,7 @@ function route(){
 const V = {}, A = {};
 
 /* ================= Home ================= */
-const openDues = () => S.dues.filter(d => !d.paid);
+const openDues = () => S.dues.filter(d => !d.paid && !d.removed);
 const groupOf = d => d.cat === "utility" ? "bbps" : GOVT.includes(d.cat) ? "govt" : "vendor";
 V.home = () => {
   const od = openDues();
@@ -707,13 +709,14 @@ V.dues = () => {
     <label class="due ${on?"on":""}"><input type="checkbox" data-due="${d.id}" ${on?"checked":""}><span class="cb">${I("check")}</span>${avatar(v)}
       <div class="grow"><b>${esc(v.name)}</b><span>${esc(d.ref)}</span>
         ${t ? `<span class="tds">TDS ${d.tdsSec} @ ${d.tdsRate}%: ${inr0(t)} goes to Income Tax · vendor gets ${inr0(d.amount - t)}</span>` : d.tdsNote ? `<span class="tds no">${d.tdsNote}</span>` : ""}</div>
-      <div class="amt">${inr0(d.amount)}<span class="${daysTo(d.due)<=3?"soon-t":""}">Due ${fD(d.due)}</span></div></label>`; };
+      <div class="amt">${inr0(d.amount)}<span class="${daysTo(d.due)<=3?"soon-t":""}">Due ${fD(d.due)}</span></div>
+      <button class="x rm" data-action="rm-due" data-id="${d.id}" aria-label="Remove ${esc(v.name)}" title="Remove">${I("x")}</button></label>`; };
   return `
   <div class="page-h"><div><h1>Pay all dues</h1><p>Every bill, vendor invoice, tax and compliance payment, settled with <b>one transaction</b> from your account.</p></div>
-    <button class="btn" data-action="sel-all">${B.sel.length === od.length ? "Clear all" : "Select all"}</button></div>
-  ${od.length ? GROUPS.map(([g,t,s]) => { const rows = od.filter(d => groupOf(d) === g); if (!rows.length) return ""; return `
-    <section class="card"><div class="card-h"><div><h2>${t}</h2><p class="muted small" style="margin-top:2px">${s}</p></div><span class="badge b-mute">${rows.length}</span></div>
-      <div class="dues">${rows.map(row).join("")}</div></section>`; }).join("")
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-action="add-biller">${I("plus")}Add biller</button>${od.length ? `<button class="btn" data-action="sel-all">${B.sel.length === od.length ? "Clear all" : "Select all"}</button>` : ""}</div></div>
+  ${od.length ? GROUPS.map(([g,t,s]) => { const rows = od.filter(d => groupOf(d) === g); if (!rows.length && g !== "bbps") return ""; return `
+    <section class="card"><div class="card-h"><div><h2>${t}</h2><p class="muted small" style="margin-top:2px">${s}</p></div>${g === "bbps" ? `<button class="btn sm" data-action="add-biller">${I("plus")}Add biller</button>` : `<span class="badge b-mute">${rows.length}</span>`}</div>
+      <div class="dues">${rows.length ? rows.map(row).join("") : `<div class="empty" style="padding:18px">No bills due. Add a biller and we'll fetch new bills automatically.</div>`}</div></section>`; }).join("")
     : `<section class="card"><div class="empty"><div class="check" style="margin:0 auto 14px">${I("check")}</div><b style="color:var(--ink)">All dues are paid.</b><br>New bills and invoices will show up here automatically.</div></section>`}
   ${od.length ? `<div class="wiz-foot"><div class="grow"><span class="muted small">${B.sel.length} selected${c.tdsTotal ? ` · TDS ${inr0(c.tdsTotal)} included` : ""}</span><b>${inr(c.gross)}</b></div>
     <button class="btn pri lg" data-action="dues-review" ${B.sel.length ? "" : "disabled"}>Review${I("arrowR")}</button></div>` : ""}`;
@@ -794,7 +797,7 @@ V.pay = () => {
     ${head}${body}</div>`;
 };
 function step1(){
-  const payees = S.vendors.filter(v => v.cat === W.cat);
+  const payees = S.vendors.filter(v => v.cat === W.cat && !v.removed);
   if (!payees.some(v => v.id === W.vid)) W.vid = (payees.find(v => v.verified) || payees[0] || {}).id || "";
   const sel = W.vid ? vendor(W.vid) : null;
   return `
@@ -938,14 +941,14 @@ function runSchedule(s){
 let vq = "";
 V.vendors = () => `
   <div class="page-h"><div><h1>Vendors</h1><p>Everyone you pay, checked with their bank before the first rupee moves.</p></div>
-    <button class="btn pri" data-action="add-vendor">${I("plus")}Add vendor</button></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-action="add-biller">${I("plus")}Add biller</button><button class="btn pri" data-action="add-vendor">${I("plus")}Add vendor</button></div></div>
   <section class="card">
     <div class="toolbar" style="margin-bottom:8px"><div class="search">${I("search")}<input class="input" id="vq" placeholder="Search vendors" value="${esc(vq)}" aria-label="Search vendors"></div></div>
     <div class="list vlist" id="vlist"></div>
   </section>`;
 A.vendors = () => {
   const draw = () => {
-    const rows = S.vendors.filter(v => !vq || (v.name + " " + (v.gstin||"")).toLowerCase().includes(vq.toLowerCase()));
+    const rows = S.vendors.filter(v => !v.removed).filter(v => !vq || (v.name + " " + (v.gstin||"")).toLowerCase().includes(vq.toLowerCase()));
     $("#vlist").innerHTML = rows.map(v => {
       const paid = S.txns.filter(t => t.vid === v.id && live(t)).reduce((s,t) => s + t.payee, 0);
       return `<div class="item">${avatar(v)}
@@ -953,7 +956,8 @@ A.vendors = () => {
           <div class="vmeta"><span class="muted small">${CATS[v.cat].label}</span><span class="code">${esc(destOf(v))}</span>${v.gstin ? `<span class="code hide-sm">GSTIN ${v.gstin}</span>` : ""}</div></div>
         <div class="amt hide-sm">${inr0(paid)}<span>paid in 6 months</span></div>
         ${v.verified ? `<span class="badge b-ok hide-sm">Verified</span><button class="btn sm" data-action="pay-vendor" data-id="${v.id}">Pay</button>`
-          : `<button class="btn sm pri" data-action="verify" data-id="${v.id}">${I("shield")}Verify</button>`}</div>`; }).join("") || '<div class="empty">No vendors match your search.</div>';
+          : `<button class="btn sm pri" data-action="verify" data-id="${v.id}">${I("shield")}Verify</button>`}
+        ${v.type === "biller" ? `<button class="x" data-action="rm-biller" data-id="${v.id}" aria-label="Remove ${esc(v.name)}" title="Remove biller">${I("x")}</button>` : ""}</div>`; }).join("") || '<div class="empty">No vendors match your search.</div>';
   };
   $("#vq").addEventListener("input", e => { vq = e.target.value; draw(); });
   draw();
@@ -1162,6 +1166,82 @@ V.about = () => `
     ${[["Month 1–2","Architecture, database and UI prototype",1],["Month 3","Working MVP release"],["Month 4","Bank and payment gateway live"],["Month 5","Pilot with real MSMEs"],["Month 6","Validation report and production launch"]].map(([m,t,now]) => `<div class="mile ${now?"now":""}"><b>${m}${now?" · now":""}</b><p>${t}</p></div>`).join("")}
   </div></section>`;
 
+/* ================= BBPS billers: add / remove ================= */
+const BBPS = {
+  "Electricity": ["TSSPDCL (Telangana South)","TSNPDCL (Telangana North)","APSPDCL (Andhra Pradesh)","BESCOM (Bengaluru)","MSEDCL (Maharashtra)","Tata Power (Mumbai)"],
+  "Water": ["HMWSSB (Hyderabad)","BWSSB (Bengaluru)","Delhi Jal Board"],
+  "Broadband & landline": ["ACT Fibernet","Airtel Xstream Fiber","JioFiber","BSNL Broadband"],
+  "Mobile postpaid": ["Airtel Postpaid","Jio Postpaid","Vi Postpaid"],
+  "Piped gas": ["Bhagyanagar Gas","Mahanagar Gas","Indraprastha Gas"],
+  "FASTag": ["ICICI Bank FASTag","HDFC Bank FASTag","Paytm Payments Bank FASTag"],
+  "Insurance": ["LIC of India","HDFC Life","ICICI Prudential Life"],
+};
+function addBillerModal(){
+  const cats = Object.keys(BBPS);
+  openModal(`
+    <div class="modal-h"><div><h2>Add a biller</h2><p class="muted small" style="margin-top:4px">Pick your biller and enter the number on your bill. We fetch the latest bill through BBPS.</p></div><button class="x" data-action="close" aria-label="Close">${I("x")}</button></div>
+    <form id="bform" style="display:flex;flex-direction:column;gap:14px" novalidate>
+      <div class="form-2">
+        <div class="field"><label for="b-cat">Bill type</label><select class="select" id="b-cat">${cats.map(c => `<option>${c}</option>`).join("")}</select></div>
+        <div class="field"><label for="b-biller">Biller</label><select class="select" id="b-biller"></select></div>
+      </div>
+      <div class="field"><label for="b-no">Consumer / account number</label><input class="input" id="b-no" placeholder="As printed on your bill" autocomplete="off"></div>
+      <label style="display:flex;gap:10px;align-items:center;font-size:13.5px;color:var(--ink-2)"><input type="checkbox" id="b-auto" checked style="width:18px;height:18px;accent-color:var(--brand)">Fetch new bills automatically every month</label>
+      <div id="b-err" class="err-t" role="alert"></div>
+      <div id="b-result"></div>
+      <button class="btn pri lg" type="submit" id="b-submit">${I("search")}Fetch bill</button>
+    </form>`);
+  const fill = () => { $("#b-biller").innerHTML = BBPS[$("#b-cat").value].map(b => `<option>${b}</option>`).join(""); };
+  $("#b-cat").addEventListener("change", fill); fill();
+  let fetched = null;
+  $("#bform").addEventListener("submit", e => {
+    e.preventDefault();
+    const btn = $("#b-submit");
+    if (fetched){ // second click: add to dues
+      S.seq++;
+      const pal = [["#A16207","#FEF9E1"],["#0369A1","#E0F2FE"],["#C2410C","#FFEDD5"],["#B91C1C","#FDECEC"]][S.seq % 4];
+      const name = fetched.biller.replace(/ \(.*\)$/,"");
+      const v = { id:"v" + S.seq, name, cat:"utility", type:"biller", consumer:fetched.no, verified:true, auto:fetched.auto, c:pal[0], cb:pal[1] };
+      S.vendors.push(v);
+      const d = { id:"d" + S.seq, vid:v.id, cat:"utility", amount:fetched.amount, due:fetched.due, ref:`${fetched.cat} bill · fetched via BBPS` };
+      S.dues.push(d); if (B) B.sel.push(d.id);
+      save(); closeModal(); route(); toast(`${name} added. Bill of ${inr0(d.amount)} is in your dues.`);
+      return;
+    }
+    const no = $("#b-no").value.trim();
+    if (!/^[A-Za-z0-9\-\/ ]{5,24}$/.test(no)){ $("#b-err").textContent = "Enter the consumer or account number exactly as it appears on your bill (5 to 24 characters)."; return; }
+    $("#b-err").textContent = "";
+    btn.disabled = true; btn.textContent = "Fetching from BBPS…";
+    setTimeout(() => {
+      const seed = [...no].reduce((a,c) => (a*31 + c.charCodeAt(0)) % 100000, 7);
+      const cat = $("#b-cat").value, base = { "Electricity":9000, "Water":1500, "Broadband & landline":1800, "Mobile postpaid":2500, "Piped gas":1200, "FASTag":3000, "Insurance":12000 }[cat];
+      fetched = { cat, biller: $("#b-biller").value, no, auto: $("#b-auto").checked, amount: (base + seed % base) * 100, due: ymd(addDays(T0, 4 + seed % 10)) };
+      $("#b-result").innerHTML = `<div class="note ok">${I("check")}<span><b>Bill found.</b> ${esc(fetched.biller)} · ${esc(no)}<br>Customer: SRI VENKATESWARA FABRICATORS · Amount <b>${inr(fetched.amount)}</b> · Due ${fDY(fetched.due)}</span></div>`;
+      btn.disabled = false; btn.innerHTML = `${I("plus")}Add to dues`;
+    }, 1100);
+  });
+  setTimeout(() => $("#b-no") && $("#b-no").focus(), 60);
+}
+function removeDueModal(id){
+  const d = S.dues.find(x => x.id === id); if (!d) return;
+  const v = vendor(d.vid), isBill = v.type === "biller";
+  openModal(`
+    <div class="modal-h"><div><h2>Remove ${esc(v.name)}?</h2><p class="muted small" style="margin-top:4px">${esc(d.ref)} · ${inr0(d.amount)} due ${fD(d.due)}</p></div><button class="x" data-action="close" aria-label="Close">${I("x")}</button></div>
+    <div class="choices">
+      <button class="choice" data-action="rm-confirm" data-id="${id}" data-scope="due"><span class="ico">${I("x")}</span><div class="grow"><b>Remove just this ${isBill ? "bill" : "payment"}</b><span>For example, if you already paid it somewhere else</span></div></button>
+      ${isBill ? `<button class="choice" data-action="rm-confirm" data-id="${id}" data-scope="biller"><span class="ico" style="background:var(--err-soft);color:var(--err)">${I("plug")}</span><div class="grow"><b>Remove the biller</b><span>Stop fetching bills from ${esc(v.name)} (${esc(v.consumer)})</span></div></button>` : ""}
+    </div>
+    <button class="btn" style="width:100%;margin-top:16px" data-action="close">Keep it</button>`);
+}
+function removeBiller(vid){
+  const v = vendor(vid);
+  v.removed = true;
+  S.dues.forEach(d => { if (d.vid === vid && !d.paid) d.removed = true; });
+  S.schedules.forEach(s => { if (s.vid === vid) s.active = false; });
+  if (B) B.sel = B.sel.filter(x => S.dues.some(d => d.id === x && !d.removed));
+  save(); closeModal(); route(); toast(`${v.name} removed. We'll stop fetching its bills.`);
+}
+
 /* ================= modal / toast ================= */
 let lastFocus = null;
 function openModal(html){ lastFocus = document.activeElement; $("#modal-root").innerHTML = `<div class="scrim" data-scrim><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`; }
@@ -1188,6 +1268,10 @@ document.addEventListener("click", e => {
     case "dues-method": B.method = a.dataset.m; route(); break;
     case "dues-pay": runBatch(); break;
     case "dues-finish": B = null; break;
+    case "add-biller": addBillerModal(); break;
+    case "rm-due": e.preventDefault(); removeDueModal(id); break;
+    case "rm-biller": { const d = S.dues.find(x => x.vid === id && !x.paid && !x.removed); if (d) removeDueModal(d.id); else openModal(`<div class="modal-h"><h2>Remove ${esc(vendor(id).name)}?</h2><button class="x" data-action="close" aria-label="Close">${I("x")}</button></div><p class="ink2">We'll stop fetching bills from this biller. Past payments stay in Activity.</p><div style="display:flex;gap:10px;margin-top:18px"><button class="btn" style="flex:1" data-action="close">Keep it</button><button class="btn pri" style="flex:1;background:var(--err);border-color:var(--err);box-shadow:none" data-action="rm-confirm" data-id="" data-vid="${id}" data-scope="biller">Remove biller</button></div>`); break; }
+    case "rm-confirm": { if (a.dataset.scope === "biller") { const vid = a.dataset.vid || S.dues.find(x => x.id === id).vid; removeBiller(vid); } else { const d = S.dues.find(x => x.id === id); d.removed = true; if (B) B.sel = B.sel.filter(x => x !== id); save(); closeModal(); route(); toast("Removed from your dues"); } break; }
     case "more": moreSheet(); break;
     case "reset": try { localStorage.removeItem(KEY); } catch(_){} S = seed(); S.v = T0.toDateString(); W = null; B = null; save(); route(); toast("Demo data reset"); break;
     case "hide-tip": S.tipHidden = true; save(); route(); break;
