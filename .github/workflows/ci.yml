@@ -19,6 +19,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.8
 
       # Generate the native folders this starter doesn't commit, so the
       # package resolves and analyzes cleanly.
@@ -38,6 +39,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.8
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
