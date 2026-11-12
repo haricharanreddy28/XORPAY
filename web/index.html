@@ -283,7 +283,7 @@ td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
 .legend{display:flex;gap:16px;font-size:12.5px;color:var(--ink-2);flex-wrap:wrap}
 
 /* plans */
-.plans{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
 .plan{display:flex;flex-direction:column;gap:14px;position:relative}
 .plan.rec{border:2px solid var(--brand);box-shadow:0 12px 32px -12px rgba(108,43,217,.35)}
 .plan .ribbon{position:absolute;top:-12px;left:20px;font-size:11.5px;font-weight:700;color:#fff;background:var(--brand);padding:3px 10px;border-radius:99px}
@@ -341,7 +341,7 @@ input[type=range]{width:100%;accent-color:var(--brand);height:28px}
 .mobile-logo{display:none!important}
 .empty{text-align:center;padding:36px 12px;color:var(--muted)}
 
-@media (max-width:1100px){.plans{grid-template-columns:repeat(2,minmax(0,1fr))}.miles{grid-template-columns:repeat(3,minmax(0,1fr))}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:1100px){.miles{grid-template-columns:repeat(3,minmax(0,1fr))}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:980px){.home-top,.two,.three{grid-template-columns:minmax(0,1fr)}.flow{grid-template-columns:minmax(0,1fr)}.arrow svg{transform:rotate(90deg)}}
 @media (max-width:860px){
   .app{grid-template-columns:minmax(0,1fr)}
@@ -380,7 +380,7 @@ input[type=range]{width:100%;accent-color:var(--brand);height:28px}
     <div class="side-foot">
       <b>Sri Venkateswara Fabricators</b>
       <span>GSTIN 36AAKFS4821K1Z7</span><br>
-      <span class="plan-badge" id="side-plan">Micro plan</span>
+      <span class="plan-badge" id="side-plan">Business plan</span>
     </div>
   </aside>
   <div class="content">
@@ -485,14 +485,16 @@ const METHODS = {
 };
 const FREQ = { once:"One time", weekly:"Every week", monthly:"Every month", quarterly:"Every 3 months" };
 const PLANS = [
-  { id:"micro",  name:"Micro",      band:"Turnover up to ₹5 Cr",  max:5e7,  price:999,
-    feats:["3 team members","50 active schedules","Vendor bank & UPI verification","GST & spend reports","Chat and email support"] },
-  { id:"small",  name:"Small",      band:"₹5 Cr to ₹50 Cr",       max:5e8,  price:2999,
-    feats:["10 team members","Unlimited schedules","Maker–checker approvals","Tally & Zoho Books export","Priority support"] },
-  { id:"medium", name:"Medium",     band:"₹50 Cr to ₹250 Cr",     max:25e8, price:7999,
-    feats:["Unlimited team members","Bulk payouts by CSV","Multi-branch & cost centres","API and webhooks","Dedicated account manager"] },
-  { id:"ent",    name:"Enterprise", band:"Above ₹250 Cr",         max:Infinity, price:null,
-    feats:["Everything in Medium","Custom approval workflows","SAP / Oracle integration","Negotiated card fee","Uptime SLA"] },
+  { id:"starter",  name:"Starter",    band:"Turnover up to ₹25 L",  max:25e5, price:499,
+    feats:["1 team member","Pay all dues in one transaction","BBPS bills and vendor payouts","Monthly statement"] },
+  { id:"growth",   name:"Growth",     band:"₹25 L to ₹1 Cr",        max:1e7,  price:999,
+    feats:["3 team members","Auto TDS on vendor payments","GST, PF, ESI challans","Autopay schedules"] },
+  { id:"business", name:"Business",   band:"₹1 Cr to ₹5 Cr",        max:5e7,  price:1999,
+    feats:["5 team members","Maker–checker approvals","Compliance register for your CA","Tally & Zoho Books export"] },
+  { id:"pro",      name:"Pro",        band:"₹5 Cr to ₹25 Cr",       max:25e7, price:4999,
+    feats:["15 team members","Bulk payouts by CSV","Multi-branch & multi-GSTIN","Priority support"] },
+  { id:"ent",      name:"Enterprise", band:"Above ₹25 Cr",          max:Infinity, price:null,
+    feats:["Unlimited team members","API and webhooks","ERP integration","Negotiated card fee"] },
 ];
 const planFor = rs => PLANS.find(p => rs <= p.max);
 const CREDIT_LIMIT = 600000_00, MONTHLY_LIMIT = 2500000_00;
@@ -568,7 +570,7 @@ function seed(){
     { id:"d11", vid:"v15", cat:"esi",     amount:4650_00,   due:ymd(new Date(T0.getFullYear(), T0.getMonth() + (T0.getDate() < 15 ? 0 : 1), 15)), ref:"Monthly contribution · 12 employees" },
     { id:"d12", vid:"v16", cat:"pt",      amount:2400_00,   due:due(18), ref:"12 employees × ₹200" },
   ];
-  return { vendors, txns, schedules, dues, turnover:3.8e7, plan:"micro", billing:"monthly", tipHidden:false, seq:900 };
+  return { vendors, txns, schedules, dues, turnover:3.8e7, plan:"business", billing:"monthly", tipHidden:false, seq:900 };
 }
 let S;
 function load(){ try { const raw = localStorage.getItem(KEY); if (raw){ const s = JSON.parse(raw); if (s && s.v === T0.toDateString()) return s; } } catch(e){} const s = seed(); s.v = T0.toDateString(); return s; }
@@ -1108,8 +1110,8 @@ V.plans = () => {
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap"><label class="label" for="to">Your annual turnover</label><span class="muted small" id="to-plan">Recommended: <b style="color:var(--brand-ink)">${rec.name}</b></span></div>
     <div class="money" id="to-val" style="font-size:34px;margin:6px 0 4px">${short(S.turnover*100)}</div>
     <input type="range" id="to" min="0" max="100" value="${t2s(S.turnover)}">
-    <div style="display:flex;justify-content:space-between" class="hint"><span>₹10 L</span><span>₹5 Cr</span><span>₹50 Cr</span><span>₹500 Cr+</span></div>
-    <p class="hint" style="margin-top:12px">Plans follow the Government of India's MSME bands (Micro up to ₹5 Cr, Small up to ₹50 Cr, Medium up to ₹250 Cr). We set your plan from your GST returns and review it once a year.</p>
+    <div style="display:flex;justify-content:space-between" class="hint"><span>₹10 L</span><span>₹500 Cr+</span></div>
+    <p class="hint" style="margin-top:12px">Plans follow common turnover limits in Indian tax rules: ₹25 L for the smallest businesses, ₹1 Cr for tax audit, ₹5 Cr for e-invoicing. We set your plan from the turnover in your GST returns and review it once a year.</p>
   </section>
   <div class="plans" style="margin-top:8px">${PLANS.map(p => `
     <section class="card plan ${p.id===rec.id?"rec":""}">${p.id===rec.id?'<span class="ribbon">Your band</span>':""}
@@ -1130,7 +1132,7 @@ V.about = () => `
     <div class="label">BARG Info Solutions Pvt. Ltd.</div>
     <h1>Every business payment and compliance, in one transaction.</h1>
     <p>XORPAY collects an MSME's BBPS bills, vendor invoices, rent, GST, TDS, PF, ESI and professional tax in one list. The owner approves a single debit by net banking, UPI or credit card, and XORPAY splits it to every biller, vendor and government portal, deducting TDS automatically and keeping every challan for the accountant.</p>
-    <div class="facts"><div><span>For</span><b>MSMEs, ₹10 L to ₹250 Cr</b></div><div><span>Revenue</span><b>Subscription by turnover</b></div><div><span>Seed ask</span><b>₹5,00,000 · 6 months</b></div></div>
+    <div class="facts"><div><span>For</span><b>MSMEs from ₹25 L turnover</b></div><div><span>Revenue</span><b>Subscription by turnover</b></div><div><span>Seed ask</span><b>₹5,00,000 · 6 months</b></div></div>
     <div style="margin-top:28px;display:flex;gap:10px;flex-wrap:wrap"><a class="btn pri lg" href="#dues">Try paying all dues</a><a class="btn lg ghost-w" href="#home">See the dashboard</a></div>
   </section>
   <div class="three">
