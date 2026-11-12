@@ -1,0 +1,1235 @@
+<title>XORPAY Business</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: quiet sidebar + one calm content column (max 1120px). One task per screen; Pay is a 3-step wizard.
+   Single light theme by choice: paper-white surfaces on cool grey, XORPAY violet as the only accent,
+   one deep-ink "money card" for the headline figure. */
+:root{
+  color-scheme: light;
+  --bg:#F4F5F8;
+  --surface:#FFFFFF;
+  --subtle:#F6F7FA;
+  --line:#E7E9EE;
+  --line-2:#D9DCE3;
+  --ink:#0D1321;
+  --ink-2:#475063;
+  --muted:#8790A2;
+  --brand:#6C2BD9;
+  --brand-hover:#5A1FC2;
+  --brand-soft:#F3EDFE;
+  --brand-ink:#4C1D95;
+  --deep:#14102A;
+  --ok:#0B8A5F;   --ok-soft:#E6F6EF;
+  --warn:#B45309; --warn-soft:#FEF4E4;
+  --err:#C8312B;  --err-soft:#FDEDEC;
+  --sky:#2563EB;  --sky-soft:#EAF1FE;
+  --f-head:"Manrope","Inter",system-ui,sans-serif;
+  --f-body:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --sh-1:0 1px 2px rgba(13,19,33,.04),0 1px 3px rgba(13,19,33,.05);
+  --sh-2:0 2px 4px rgba(13,19,33,.04),0 12px 32px -8px rgba(13,19,33,.10);
+  --sh-brand:0 6px 18px -6px rgba(108,43,217,.55);
+  --r:18px; --r-sm:12px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14.5px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid rgba(108,43,217,.35);outline-offset:2px;border-radius:10px}
+h1,h2,h3{font-family:var(--f-head);margin:0;letter-spacing:-.02em;text-wrap:balance;color:var(--ink)}
+h1{font-size:clamp(24px,3vw,30px);font-weight:800}
+h2{font-size:17px;font-weight:700}
+h3{font-size:15px;font-weight:700}
+p{margin:0}
+.money{font-family:var(--f-head);font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)} .ink2{color:var(--ink-2)}
+.small{font-size:13px}
+.label{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+
+/* ---------- frame ---------- */
+.app{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100%}
+.side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:22px;padding:24px 16px;background:var(--surface);border-right:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:10px;padding:0 8px;text-decoration:none;color:var(--ink)}
+.logo-mark{width:32px;height:32px;border-radius:9px;background:var(--brand);color:#fff;display:grid;place-items:center;font-family:var(--f-head);font-weight:800;font-size:15px}
+.logo b{font-family:var(--f-head);font-weight:800;font-size:17px;letter-spacing:.02em}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:11px;color:var(--ink-2);text-decoration:none;font-weight:500;transition:background .15s,color .15s}
+.nav a svg{width:19px;height:19px;flex:none}
+.nav a:hover{background:var(--subtle);color:var(--ink)}
+.nav a.on{background:var(--brand-soft);color:var(--brand-ink);font-weight:600}
+.nav .grp{margin:14px 12px 4px;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.side-foot{margin-top:auto;padding:14px;border-radius:14px;background:var(--subtle);border:1px solid var(--line)}
+.side-foot b{display:block;font-size:13.5px}
+.side-foot span{font-size:12px;color:var(--muted)}
+.plan-badge{display:inline-flex;margin-top:10px;font-size:12px!important;font-weight:600;color:var(--brand-ink)!important;background:var(--brand-soft);padding:3px 10px;border-radius:99px}
+
+.content{min-width:0;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+.demo-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2)}
+.demo-bar .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--warn);margin-right:8px;vertical-align:1px}
+.page-h{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.page-h p{margin-top:6px;color:var(--ink-2);max-width:62ch}
+
+/* ---------- primitives ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-1);padding:22px;min-width:0}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 18px;border-radius:12px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);font-weight:600;font-size:14px;cursor:pointer;text-decoration:none;white-space:nowrap;transition:background .15s,border-color .15s,box-shadow .15s,transform .1s}
+.btn:hover{background:var(--subtle)}
+.btn:active{transform:translateY(1px)}
+.btn svg{width:17px;height:17px}
+.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:var(--sh-brand)}
+.btn.pri:hover{background:var(--brand-hover)}
+.btn.lg{padding:14px 22px;font-size:15px;border-radius:14px}
+.btn.sm{padding:7px 12px;font-size:13px;border-radius:10px}
+.btn.link{border:0;background:none;color:var(--brand);padding:6px 4px;box-shadow:none}
+.btn.link:hover{background:none;text-decoration:underline}
+.btn[disabled]{opacity:.45;pointer-events:none;box-shadow:none}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;white-space:nowrap}
+.b-ok{color:var(--ok);background:var(--ok-soft)}
+.b-warn{color:var(--warn);background:var(--warn-soft)}
+.b-err{color:var(--err);background:var(--err-soft)}
+.b-sky{color:var(--sky);background:var(--sky-soft)}
+.b-brand{color:var(--brand-ink);background:var(--brand-soft)}
+.b-mute{color:var(--ink-2);background:var(--subtle);border:1px solid var(--line)}
+.av{width:40px;height:40px;border-radius:12px;flex:none;display:grid;place-items:center;font-family:var(--f-head);font-weight:700;font-size:14px;color:var(--c,#6C2BD9);background:var(--cb,#F3EDFE)}
+.ico{width:40px;height:40px;border-radius:12px;flex:none;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand)}
+.ico svg{width:20px;height:20px}
+
+/* ---------- home ---------- */
+.home-top{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:20px}
+.hero{position:relative;overflow:hidden;border-radius:22px;padding:28px;color:#fff;background:var(--deep);box-shadow:var(--sh-2);display:flex;flex-direction:column;justify-content:space-between;gap:24px}
+.hero::after{content:"";position:absolute;width:420px;height:420px;right:-140px;top:-180px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.55),transparent 65%);pointer-events:none}
+.hero>*{position:relative;z-index:1}
+.hero .label{color:rgba(255,255,255,.6)}
+.hero .money{font-size:clamp(36px,5vw,52px);line-height:1;color:#fff}
+.hero p{color:rgba(255,255,255,.72)}
+.split{display:flex;height:8px;border-radius:8px;overflow:hidden;background:rgba(255,255,255,.12)}
+.split i{display:block;height:100%}
+.split-legend{display:flex;gap:28px;flex-wrap:wrap;font-size:13px;color:rgba(255,255,255,.75)}
+.split-legend b{display:block;color:#fff;font-size:16px;font-family:var(--f-head);font-variant-numeric:tabular-nums;margin-top:2px}
+.sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:1px}
+.credit{display:flex;flex-direction:column;gap:16px}
+.bar{height:8px;border-radius:8px;background:var(--subtle);overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;background:var(--brand);border-radius:8px}
+.perk{display:flex;gap:12px;align-items:flex-start;padding:14px;border-radius:14px;background:var(--brand-soft);color:var(--brand-ink);font-size:13.5px}
+.perk svg{width:18px;height:18px;flex:none;margin-top:2px}
+.quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.qa{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:18px;border-radius:16px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--sh-1);cursor:pointer;text-align:left;transition:border-color .15s,box-shadow .2s,transform .2s}
+.qa:hover{border-color:#CDBDF7;box-shadow:var(--sh-2);transform:translateY(-2px)}
+.qa .ico{margin-bottom:10px}
+.qa b{font-weight:600;font-size:14.5px}
+.qa span.s{font-size:12.5px;color:var(--muted)}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+.tip{display:flex;align-items:center;gap:16px;padding:16px 18px;border-radius:16px;background:linear-gradient(90deg,#F3EDFE,#FFFFFF);border:1px solid #E4D8FC}
+.tip .grow{flex:1;min-width:0}
+.tip b{font-family:var(--f-head);font-size:15px}
+
+/* lists */
+.list{display:flex;flex-direction:column}
+.item{display:flex;align-items:center;gap:14px;padding:13px 0;border-top:1px solid var(--line)}
+.item:first-child{border-top:0;padding-top:4px}
+.item .grow{flex:1;min-width:0}
+.item .grow b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .grow>span{font-size:12.5px;color:var(--muted)}
+.item .amt{text-align:right;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.item .amt>span{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:2px}
+.item.click{cursor:pointer;border-radius:12px;margin:0 -10px;padding-left:10px;padding-right:10px}
+.item.click:hover{background:var(--subtle)}
+.date{width:46px;flex:none;text-align:center;border-radius:12px;background:var(--subtle);border:1px solid var(--line);padding:5px 0;line-height:1.15}
+.date small{display:block;font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.date b{font-family:var(--f-head);font-size:17px}
+.date.soon{background:var(--warn-soft);border-color:#F6DDB2}
+.date.soon small{color:var(--warn)}
+.group-t{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin:6px 0 2px}
+
+/* ---------- wizard ---------- */
+.wizard{max-width:760px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:20px}
+.progress{display:flex;gap:8px}
+.progress div{flex:1;display:flex;flex-direction:column;gap:8px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.progress div i{display:block;height:4px;border-radius:4px;background:var(--line)}
+.progress div.on{color:var(--brand-ink)}
+.progress div.on i{background:var(--brand)}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.tile{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:16px;border-radius:16px;border:1.5px solid var(--line);background:var(--surface);cursor:pointer;text-align:left;transition:border-color .15s,background .15s,box-shadow .15s}
+.tile:hover{border-color:#CDBDF7}
+.tile.on{border-color:var(--brand);background:var(--brand-soft);box-shadow:0 0 0 3px rgba(108,43,217,.12)}
+.tile b{font-weight:600;font-size:14px}
+.choices{display:flex;flex-direction:column;gap:10px}
+.choice{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);cursor:pointer;text-align:left;width:100%;transition:border-color .15s,background .15s}
+.choice:hover{border-color:#CDBDF7}
+.choice.on{border-color:var(--brand);background:#FBF9FF;box-shadow:0 0 0 3px rgba(108,43,217,.1)}
+.choice .grow{flex:1;min-width:0}
+.choice .grow b{display:block;font-weight:600}
+.choice .grow span{font-size:12.5px;color:var(--muted)}
+.radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--line-2);flex:none;display:grid;place-items:center}
+.choice.on .radio{border-color:var(--brand)}
+.choice.on .radio::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--brand)}
+.amount-wrap{display:flex;align-items:center;justify-content:center;gap:6px;padding:26px 16px;border-radius:18px;background:var(--subtle);border:1.5px solid var(--line);transition:border-color .15s,box-shadow .15s}
+.amount-wrap:focus-within{border-color:var(--brand);box-shadow:0 0 0 4px rgba(108,43,217,.12);background:#fff}
+.amount-wrap span{font-family:var(--f-head);font-size:34px;font-weight:700;color:var(--muted)}
+.amount-wrap input{border:0;background:transparent;outline:none;font-family:var(--f-head);font-weight:800;font-size:clamp(34px,6vw,48px);letter-spacing:-.03em;width:100%;max-width:360px;font-variant-numeric:tabular-nums;color:var(--ink);min-width:0}
+.amount-wrap input::placeholder{color:#C3C8D2}
+.quick-amt{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.pillbtn{padding:7px 14px;border-radius:99px;border:1px solid var(--line-2);background:var(--surface);font-weight:500;font-size:13px;cursor:pointer;color:var(--ink-2)}
+.pillbtn:hover{border-color:var(--brand);color:var(--brand)}
+.seg{display:inline-flex;padding:4px;border-radius:12px;background:var(--subtle);border:1px solid var(--line)}
+.seg button{border:0;background:transparent;padding:8px 16px;border-radius:9px;cursor:pointer;color:var(--ink-2);font-weight:600;font-size:13.5px;white-space:nowrap}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--sh-1)}
+.field{display:flex;flex-direction:column;gap:7px;min-width:0}
+.field label{font-size:13px;font-weight:600;color:var(--ink-2)}
+.input,.select{width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);outline:none;transition:border-color .15s,box-shadow .15s}
+.input:focus,.select:focus{border-color:var(--brand);box-shadow:0 0 0 4px rgba(108,43,217,.12)}
+.form-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.hint{font-size:12.5px;color:var(--muted)}
+.err-t{font-size:13px;color:var(--err)}
+.note{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;font-size:13px}
+.note svg{width:17px;height:17px;flex:none;margin-top:1px}
+.note.ok{background:var(--ok-soft);color:#065F46}
+.note.brand{background:var(--brand-soft);color:var(--brand-ink)}
+.note.warn{background:var(--warn-soft);color:#92400E}
+.wiz-foot{position:sticky;bottom:0;z-index:5;display:flex;align-items:center;gap:14px;padding:14px 18px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0px));border-radius:18px 18px 0 0;background:rgba(255,255,255,.94);backdrop-filter:blur(10px);border:1px solid var(--line);border-bottom:0;box-shadow:0 -8px 24px -12px rgba(13,19,33,.15)}
+.wiz-foot .grow{flex:1;min-width:0}
+.wiz-foot .grow b{display:block;font-family:var(--f-head);font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+.receipt{display:flex;flex-direction:column;gap:12px}
+.receipt .line{display:flex;justify-content:space-between;gap:14px}
+.receipt .line span:first-child{color:var(--ink-2)}
+.receipt .line span:last-child{font-weight:500;text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.receipt .total{border-top:1px dashed var(--line-2);padding-top:14px;margin-top:2px;font-size:17px}
+.receipt .total span{font-weight:800!important;color:var(--ink)!important;font-family:var(--f-head)}
+.review-head{display:flex;align-items:center;gap:14px;padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid var(--line)}
+.done{text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 0}
+.check{width:76px;height:76px;border-radius:50%;background:var(--ok-soft);color:var(--ok);display:grid;place-items:center;animation:pop .5s cubic-bezier(.2,1.4,.4,1) both}
+.check svg{width:38px;height:38px}
+@keyframes pop{from{transform:scale(.4);opacity:0}}
+.track{display:flex;flex-direction:column;text-align:left;width:100%;max-width:420px;margin:12px auto 0}
+.st{display:flex;gap:14px;position:relative;padding-bottom:18px}
+.st:last-child{padding-bottom:0}
+.st::before{content:"";position:absolute;left:11px;top:26px;bottom:2px;width:2px;background:var(--line)}
+.st:last-child::before{display:none}
+.st .b{width:24px;height:24px;border-radius:50%;border:2px solid var(--line-2);background:#fff;flex:none;display:grid;place-items:center;z-index:1;transition:all .25s}
+.st .b svg{width:13px;height:13px;opacity:0;color:#fff}
+.st.ok .b{background:var(--ok);border-color:var(--ok)}
+.st.ok .b svg{opacity:1}
+.st.act .b{border-color:var(--brand);border-top-color:transparent;animation:spin .9s linear infinite}
+.st.ok::before{background:var(--ok)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.st b{display:block;font-weight:600;font-size:14px}
+.st span{font-size:12.5px;color:var(--muted)}
+
+/* ---------- dues ---------- */
+.dues{display:flex;flex-direction:column;gap:8px}
+.due{position:relative;display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);cursor:pointer;transition:border-color .15s,background .15s}
+.due:hover{border-color:#CDBDF7}
+.due.on{border-color:var(--brand);background:#FBF9FF}
+.due input{position:absolute;opacity:0;width:1px;height:1px}
+.due .cb{width:22px;height:22px;border-radius:7px;border:2px solid var(--line-2);flex:none;display:grid;place-items:center;background:#fff}
+.due .cb svg{width:14px;height:14px;color:#fff;opacity:0}
+.due.on .cb{background:var(--brand);border-color:var(--brand)}
+.due.on .cb svg{opacity:1}
+.due input:focus-visible + .cb{outline:3px solid rgba(108,43,217,.35);outline-offset:2px}
+.due .grow{flex:1;min-width:0}
+.due .grow b{display:block;font-weight:600}
+.due .grow span{display:block;font-size:12.5px;color:var(--muted)}
+.due .grow .tds{display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:var(--brand-ink);background:var(--brand-soft);padding:3px 9px;border-radius:8px}
+.due .grow .tds.no{color:var(--ink-2);background:var(--subtle)}
+.due .amt{text-align:right;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.due .amt span{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:2px}
+.due .amt .soon-t{color:var(--warn)}
+.bp .st-ic{width:24px;height:24px;border-radius:50%;border:2px solid var(--line-2);display:grid;place-items:center;flex:none}
+.bp .st-ic svg{width:13px;height:13px;color:#fff;opacity:0}
+.bp.ok .st-ic{background:var(--ok);border-color:var(--ok)}
+.bp.ok .st-ic svg{opacity:1}
+.bp.act .st-ic{border-color:var(--brand);border-top-color:transparent;animation:spin .9s linear infinite}
+.bp:not(.ok):not(.act){opacity:.55}
+
+/* ---------- tables / filters ---------- */
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.search{position:relative;flex:1 1 260px}
+.search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:17px;height:17px;color:var(--muted)}
+.search input{padding-left:40px}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;font-weight:600;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);letter-spacing:.02em}
+td{padding:13px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+.toggle{width:42px;height:24px;border-radius:99px;border:0;background:var(--line-2);position:relative;cursor:pointer;flex:none;transition:background .2s}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s}
+.toggle.on{background:var(--ok)}
+.toggle.on::after{transform:translateX(18px)}
+.vlist .item{padding:16px 0}
+.vmeta{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;align-items:center}
+.code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--ink-2);background:var(--subtle);border:1px solid var(--line);padding:1px 7px;border-radius:6px;overflow-wrap:anywhere}
+
+/* reports */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.stats.s3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.stat .money{font-size:26px;margin-top:8px;display:block}
+.stat p{font-size:12.5px;color:var(--muted);margin-top:4px}
+.chart{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;height:240px}
+.yaxis{display:flex;flex-direction:column-reverse;justify-content:space-between;font-size:11.5px;color:var(--muted);padding-bottom:26px;text-align:right;font-variant-numeric:tabular-nums}
+.plot{position:relative;display:flex;align-items:flex-end;gap:18px;padding-bottom:26px}
+.plot .gl{position:absolute;left:0;right:0;height:1px;background:var(--line)}
+.col{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;position:relative;min-width:0}
+.stack{width:min(44px,100%);display:flex;flex-direction:column;border-radius:8px 8px 4px 4px;overflow:hidden;position:relative;z-index:1}
+.col .xl{position:absolute;bottom:-26px;font-size:12px;color:var(--muted)}
+.col .tl{font-size:11.5px;color:var(--ink-2);font-weight:600;margin-bottom:6px;white-space:nowrap;position:relative;z-index:1}
+.hbar{display:grid;grid-template-columns:130px minmax(0,1fr) 72px;gap:14px;align-items:center;padding:8px 0}
+.hbar .t{height:10px;border-radius:6px;background:var(--subtle);overflow:hidden}
+.hbar .t i{display:block;height:100%;border-radius:6px;background:var(--brand)}
+.hbar .v{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:16px;font-size:12.5px;color:var(--ink-2);flex-wrap:wrap}
+
+/* plans */
+.plans{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.plan{display:flex;flex-direction:column;gap:14px;position:relative}
+.plan.rec{border:2px solid var(--brand);box-shadow:0 12px 32px -12px rgba(108,43,217,.35)}
+.plan .ribbon{position:absolute;top:-12px;left:20px;font-size:11.5px;font-weight:700;color:#fff;background:var(--brand);padding:3px 10px;border-radius:99px}
+.plan .money{font-size:32px}
+.plan .money small{font-family:var(--f-body);font-size:13px;font-weight:500;color:var(--muted);letter-spacing:0}
+.plan ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:13.5px;color:var(--ink-2)}
+.plan li{display:flex;gap:9px}
+.plan li svg{width:16px;height:16px;flex:none;color:var(--ok);margin-top:2px}
+.plan .btn{margin-top:auto}
+input[type=range]{width:100%;accent-color:var(--brand);height:28px}
+
+/* about */
+.about-hero{padding:40px;border-radius:24px;background:var(--deep);color:#fff;position:relative;overflow:hidden}
+.about-hero::after{content:"";position:absolute;width:520px;height:520px;right:-160px;bottom:-260px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.5),transparent 65%)}
+.about-hero>*{position:relative;z-index:1}
+.about-hero h1{color:#fff;font-size:clamp(28px,4.4vw,46px);line-height:1.1;max-width:20ch;margin-top:12px}
+.about-hero p{color:rgba(255,255,255,.75);max-width:60ch;margin-top:14px;font-size:16px}
+.about-hero .label{color:#C4B5FD}
+.facts{display:flex;gap:36px;flex-wrap:wrap;margin-top:28px}
+.facts b{display:block;font-family:var(--f-head);font-size:18px;margin-top:2px}
+.facts span{font-size:12px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.btn.ghost-w{background:transparent;color:#fff;border-color:rgba(255,255,255,.3)}
+.btn.ghost-w:hover{background:rgba(255,255,255,.08)}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.bul{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:10px;color:var(--ink-2)}
+.bul li{display:flex;gap:10px}
+.bul li::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--brand);flex:none;margin-top:9px}
+.flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:14px;align-items:center}
+.node{padding:18px;border-radius:16px;background:var(--subtle);border:1px solid var(--line);text-align:center}
+.node.mid{background:var(--brand-soft);border-color:#DCCBFB}
+.node b{display:block;font-family:var(--f-head);margin-bottom:4px}
+.node span{font-size:13px;color:var(--ink-2)}
+.arrow{color:var(--brand);font-size:12px;font-weight:600;text-align:center}
+.arrow svg{display:block;margin:4px auto 0;width:22px;height:22px}
+.miles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.mile{padding:16px;border-radius:14px;border:1px solid var(--line);background:var(--surface)}
+.mile b{font-family:var(--f-head);font-size:13px;color:var(--brand-ink)}
+.mile p{font-size:13px;color:var(--ink-2);margin-top:6px}
+.mile.now{border-color:var(--brand);background:var(--brand-soft)}
+
+/* modal, toast, bottom nav */
+.scrim{position:fixed;inset:0;z-index:50;background:rgba(13,19,33,.42);backdrop-filter:blur(3px);display:grid;place-items:center;animation:fade .2s;
+  padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.modal{width:min(500px,100%);max-height:100%;overflow:auto;background:var(--surface);border-radius:22px;box-shadow:0 30px 80px -20px rgba(13,19,33,.4);padding:26px;animation:rise .3s cubic-bezier(.2,.8,.2,1)}
+.modal-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px}
+.x{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;cursor:pointer;color:var(--ink-2);flex:none}
+.x svg{width:16px;height:16px}
+@keyframes fade{from{opacity:0}}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}}
+.view{animation:rise .35s cubic-bezier(.2,.8,.2,1) both;display:flex;flex-direction:column;gap:24px}
+#toast{position:fixed;z-index:60;left:50%;bottom:max(24px,calc(env(safe-area-inset-bottom,0px) + 84px));transform:translate(-50%,20px);opacity:0;transition:all .25s;pointer-events:none;
+  background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;font-weight:500;box-shadow:var(--sh-2);max-width:calc(100vw - 32px)}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+.tabbar{display:none}
+.mobile-logo{display:none!important}
+.empty{text-align:center;padding:36px 12px;color:var(--muted)}
+
+@media (max-width:1100px){.plans{grid-template-columns:repeat(2,minmax(0,1fr))}.miles{grid-template-columns:repeat(3,minmax(0,1fr))}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:980px){.home-top,.two,.three{grid-template-columns:minmax(0,1fr)}.flow{grid-template-columns:minmax(0,1fr)}.arrow svg{transform:rotate(90deg)}}
+@media (max-width:860px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{display:none}
+  .content{padding-top:16px;padding-bottom:110px}
+  .mobile-logo{display:flex!important}
+  .tabbar{display:flex;position:fixed;z-index:30;left:0;right:0;bottom:0;background:rgba(255,255,255,.97);backdrop-filter:blur(12px);border-top:1px solid var(--line);
+    padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+  .tabbar a,.tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;font-size:11px;font-weight:600;color:var(--muted);text-decoration:none;border:0;background:none;cursor:pointer}
+  .tabbar svg{width:22px;height:22px}
+  .tabbar .on{color:var(--brand)}
+  .tabbar .paybtn svg{width:24px;height:24px;padding:7px;border-radius:14px;background:var(--brand);color:#fff;box-shadow:var(--sh-brand);box-sizing:content-box;margin-top:-18px}
+  .wiz-foot{bottom:calc(66px + env(safe-area-inset-bottom,0px));border-radius:18px;border-bottom:1px solid var(--line);padding-bottom:14px}
+}
+@media (max-width:640px){
+  .quick,.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .form-2,.plans,.miles,.stats,.stats.s3{grid-template-columns:minmax(0,1fr)}
+  .hero,.about-hero{padding:22px}
+  .card{padding:18px}
+  .hbar{grid-template-columns:96px minmax(0,1fr) 64px;gap:10px}
+  .hide-sm{display:none!important}
+  .due{gap:10px;padding:12px}
+  .due .av{display:none}
+  .tip{flex-wrap:wrap;align-items:flex-start;position:relative;padding-right:56px}
+  .tip .ico{display:none}
+  .tip .grow{flex-basis:100%}
+  .tip .x{position:absolute;top:12px;right:12px}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+
+<div class="app">
+  <aside class="side">
+    <a class="logo" href="#home"><span class="logo-mark">X</span><b>XORPAY</b></a>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot">
+      <b>Sri Venkateswara Fabricators</b>
+      <span>GSTIN 36AAKFS4821K1Z7</span><br>
+      <span class="plan-badge" id="side-plan">Micro plan</span>
+    </div>
+  </aside>
+  <div class="content">
+    <div class="wrap">
+      <div class="demo-bar">
+        <a class="logo mobile-logo" href="#home" style="padding:0"><span class="logo-mark">X</span><b>XORPAY</b></a>
+        <span><span class="dot"></span>Prototype with sample data. No real money moves.</span>
+        <button class="btn link small" data-action="reset">Reset demo</button>
+      </div>
+      <main id="main"></main>
+    </div>
+  </div>
+</div>
+<nav class="tabbar" id="tabbar"></nav>
+<div id="modal-root"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+"use strict";
+/* ================= utilities ================= */
+const KEY = "xorpay-web-v4";
+const T0 = new Date(); T0.setHours(0,0,0,0);
+const pad = n => String(n).padStart(2,"0");
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y,m-1,d); };
+const addDays = (d,n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const addMonths = (d,n) => { const x = new Date(d.getFullYear(), d.getMonth()+n, 1); const last = new Date(x.getFullYear(), x.getMonth()+1, 0).getDate(); x.setDate(Math.min(d.getDate(), last)); return x; };
+const daysTo = s => Math.round((parse(s) - T0) / 864e5);
+const fD = s => parse(s).toLocaleDateString("en-IN",{day:"numeric",month:"short"});
+const fDY = s => parse(s).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});
+const nf2 = new Intl.NumberFormat("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+const nf0 = new Intl.NumberFormat("en-IN",{maximumFractionDigits:0});
+const inr = p => "₹" + nf2.format(p/100);
+const inr0 = p => "₹" + nf0.format(Math.round(p/100));
+const short = p => { const r = p/100; if (r >= 1e7) return "₹" + +(r/1e7).toFixed(2) + " Cr"; if (r >= 1e5) return "₹" + +(r/1e5).toFixed(2) + " L"; if (r >= 1e3) return "₹" + +(r/1e3).toFixed(1) + "K"; return "₹" + nf0.format(r); };
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $ = (s, r=document) => r.querySelector(s);
+const when = s => { const d = daysTo(s); return d < 0 ? "Overdue" : d === 0 ? "Today" : d === 1 ? "Tomorrow" : `In ${d} days`; };
+
+/* ================= domain ================= */
+const CARD_FEE_PCT = 2, GST_PCT = 18;
+// The convenience fee applies ONLY to credit-card payments. UPI and net banking are free.
+function quote(payee, method){
+  if (method !== "card") return { payee, fee:0, gst:0, total:payee };
+  const fee = Math.round(payee * CARD_FEE_PCT / 100), gst = Math.round(fee * GST_PCT / 100);
+  return { payee, fee, gst, total: payee + fee + gst };
+}
+const tdsFor = d => d.tdsRate ? Math.round(d.amount * d.tdsRate / 100) : 0;
+const coinsFor = (p, m) => m === "card" ? Math.floor(p / 10000) : 0;
+
+const P = {
+  home:'<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+  send:'<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>',
+  cal:'<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  users:'<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M16 4a4 4 0 0 1 0 8M22 21a7 7 0 0 0-4-6.3"/>',
+  list:'<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>',
+  chart:'<path d="M3 21h18"/><rect x="5" y="11" width="3" height="7" rx="1"/><rect x="10.5" y="6" width="3" height="12" rx="1"/><rect x="16" y="13" width="3" height="5" rx="1"/>',
+  layers:'<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  more:'<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
+  check:'<path d="m5 12 5 5L20 7"/>',
+  x:'<path d="M6 6l12 12M18 6 6 18"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  arrowR:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  arrowL:'<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  shield:'<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  card:'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20M6 15h4"/>',
+  bank:'<path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/>',
+  upi:'<path d="m7 4 6 8-6 8"/><path d="m12 4 6 8-6 8"/>',
+  box:'<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
+  building:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1"/>',
+  receipt:'<path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  landmark:'<path d="M3 21h18M5 21V10M19 21V10M9 21V10M15 21V10M2 10l10-6 10 6z"/>',
+  wallet:'<path d="M3 7a2 2 0 0 1 2-2h13v4"/><rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="16" cy="13.5" r="1.3"/>',
+  cap:'<path d="m2 9 10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
+  plug:'<path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/>',
+  copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+  bolt:'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  sparkle:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
+};
+const I = (k, a="") => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${a}>${P[k]}</svg>`;
+
+const CATS = {
+  vendor:   { label:"Vendor invoice",   short:"Vendors",   icon:"box",      ref:"Invoice number", ph:"INV-2318" },
+  rent:     { label:"Rent",             short:"Rent",      icon:"building", ref:"Rent month",     ph:"Dec 2026" },
+  gst:      { label:"GST",              short:"GST",       icon:"receipt",  ref:"CPIN (challan number)", ph:"26113600012345" },
+  tax:      { label:"TDS / Income tax", short:"Taxes",     icon:"landmark", ref:"Challan / BSR code", ph:"ITNS 281" },
+  salary:   { label:"Salaries",         short:"Salaries",  icon:"wallet",   ref:"Payroll month",  ph:"Nov 2026" },
+  education:{ label:"Education fees",   short:"Education", icon:"cap",      ref:"Student ID",     ph:"VPS-1043" },
+  utility:  { label:"Bills (BBPS)",     short:"Bills",     icon:"plug",     ref:"Consumer number", ph:"110233445501" },
+  pf:       { label:"PF (EPFO)",        short:"PF",        icon:"shield",   ref:"ECR / TRRN",     ph:"Oct 2026 ECR" },
+  esi:      { label:"ESI",              short:"ESI",       icon:"shield",   ref:"Challan month",  ph:"Oct 2026" },
+  pt:       { label:"Professional tax", short:"Prof. tax", icon:"landmark", ref:"Return period",  ph:"Oct 2026" },
+};
+const GOVT = ["gst","tax","pf","esi","pt"];
+const METHODS = {
+  upi:  { label:"UPI",         sub:"svfab@icici",            icon:"upi",  perk:"Instant, from your current account", fee:"Free" },
+  nb:   { label:"Net banking", sub:"ICICI Current •• 0921",  icon:"bank", perk:"Direct debit from your bank", fee:"Free" },
+  card: { label:"Credit card", sub:"HDFC Business •• 4417", icon:"card", perk:"Up to 45 days interest-free", fee:"2% + GST" },
+};
+const FREQ = { once:"One time", weekly:"Every week", monthly:"Every month", quarterly:"Every 3 months" };
+const PLANS = [
+  { id:"micro",  name:"Micro",      band:"Turnover up to ₹5 Cr",  max:5e7,  price:999,
+    feats:["3 team members","50 active schedules","Vendor bank & UPI verification","GST & spend reports","Chat and email support"] },
+  { id:"small",  name:"Small",      band:"₹5 Cr to ₹50 Cr",       max:5e8,  price:2999,
+    feats:["10 team members","Unlimited schedules","Maker–checker approvals","Tally & Zoho Books export","Priority support"] },
+  { id:"medium", name:"Medium",     band:"₹50 Cr to ₹250 Cr",     max:25e8, price:7999,
+    feats:["Unlimited team members","Bulk payouts by CSV","Multi-branch & cost centres","API and webhooks","Dedicated account manager"] },
+  { id:"ent",    name:"Enterprise", band:"Above ₹250 Cr",         max:Infinity, price:null,
+    feats:["Everything in Medium","Custom approval workflows","SAP / Oracle integration","Negotiated card fee","Uptime SLA"] },
+];
+const planFor = rs => PLANS.find(p => rs <= p.max);
+const CREDIT_LIMIT = 600000_00, MONTHLY_LIMIT = 2500000_00;
+
+/* ================= seed ================= */
+function seed(){
+  const vendors = [
+    { id:"v1", name:"Sri Lakshmi Steel Traders", cat:"vendor", type:"bank", acct:"50200041824821", ifsc:"HDFC0001234", gstin:"36AABCS1429B1ZB", verified:true, c:"#6C2BD9", cb:"#F3EDFE" },
+    { id:"v2", name:"Ramesh Kumar Reddy", note:"Landlord", cat:"rent", type:"upi", vpa:"rameshreddy@okhdfcbank", verified:true, c:"#BE185D", cb:"#FDEBF3" },
+    { id:"v3", name:"GST · GSTN Portal", cat:"gst", type:"govt", verified:true, c:"#047857", cb:"#E6F6EF" },
+    { id:"v4", name:"Swift Logistics Pvt Ltd", cat:"vendor", type:"bank", acct:"004405012390", ifsc:"ICIC0004417", gstin:"36AAJCS7782Q1Z3", verified:true, c:"#1D4ED8", cb:"#EAF1FE" },
+    { id:"v5", name:"Vidya Public School", cat:"education", type:"bank", acct:"38201945512", ifsc:"SBIN0020345", verified:true, c:"#B45309", cb:"#FEF4E4" },
+    { id:"v6", name:"Bharat Packaging Co.", cat:"vendor", type:"upi", vpa:"bharatpack@ybl", gstin:"36AAFFB2290L1Z9", verified:false, c:"#475063", cb:"#EEF0F4" },
+    { id:"v7", name:"TSSPDCL Electricity", cat:"utility", type:"biller", consumer:"110233445501", verified:true, c:"#A16207", cb:"#FEF9E1" },
+    { id:"v8", name:"Income Tax Dept · TDS", cat:"tax", type:"govt", verified:true, c:"#0F766E", cb:"#E4F5F3" },
+    { id:"v9", name:"Shop-floor team (12)", cat:"salary", type:"bank", acct:"BULK", ifsc:"Multiple", verified:true, c:"#7C3AED", cb:"#F3EDFE" },
+    { id:"v10", name:"HMWSSB Water", cat:"utility", type:"biller", consumer:"CAN 0412-7781", verified:true, c:"#0369A1", cb:"#E0F2FE" },
+    { id:"v11", name:"ACT Fibernet", cat:"utility", type:"biller", consumer:"ACT-1100982", verified:true, c:"#C2410C", cb:"#FFEDD5" },
+    { id:"v12", name:"Airtel Postpaid (5 lines)", cat:"utility", type:"biller", consumer:"98480 •• 211", verified:true, c:"#B91C1C", cb:"#FDECEC" },
+    { id:"v13", name:"Rao & Associates (CA)", cat:"vendor", type:"bank", acct:"917020034411", ifsc:"UTIB0000553", gstin:"36AAJFR1187D1ZQ", verified:true, c:"#4338CA", cb:"#EEF2FF" },
+    { id:"v14", name:"EPFO · Provident Fund", cat:"pf", type:"govt", verified:true, c:"#15803D", cb:"#E7F7EC" },
+    { id:"v15", name:"ESIC", cat:"esi", type:"govt", verified:true, c:"#0E7490", cb:"#E0F7FA" },
+    { id:"v16", name:"Telangana Commercial Taxes", cat:"pt", type:"govt", verified:true, c:"#9333EA", cb:"#F5EBFF" },
+  ];
+  const txns = []; let n = 0;
+  const add = (date, vid, cat, rupees, method, status="Settled", ref="", extra={}) => {
+    if (date > T0) return; n++;
+    const q = quote(rupees*100, method);
+    txns.push({ id:"XP" + (5100230 + n*37), date: ymd(date), vid, cat, method, ...q, status, ref,
+      utr: status === "Settled" ? "UTR" + (441000000000 + n*7919) : "", coins: status === "Settled" ? coinsFor(q.payee, method) : 0, ...extra });
+  };
+  const steel = [184500,142000,210000,166300,198750,175000], elec = [12400,13950,11880,14320,15200,13100];
+  const gst = [38640,41200,36980,44150,39870,42300], tds = [8400,9100,7800,8800,9600,9200];
+  for (let m = 5; m >= 0; m--){
+    const Y = T0.getFullYear(), M = T0.getMonth() - m, i = 5 - m, d = day => new Date(Y, M, day);
+    const mon = d(1).toLocaleDateString("en-IN",{month:"short",year:"numeric"});
+    add(d(1),"v2","rent",45000,"card","Settled","Rent " + mon);
+    add(d(5),"v4","vendor",22000,"upi","Settled","Retainer " + mon);
+    add(d(7),"v8","tax",tds[i],"nb","Settled","ITNS 281");
+    if (m % 3 === 1) add(d(10),"v5","education",28000,"card","Settled","VPS-1043 term fee");
+    add(d(12),"v1","vendor",steel[i],"card","Settled","INV-" + (2180 + i*23));
+    add(d(15),"v7","utility",elec[i],"upi","Settled","110233445501");
+    add(d(20),"v3","gst",gst[i],"nb","Settled","CPIN 2611360001" + (2300 + i));
+    add(new Date(Y, M+1, 0),"v9","salary",186000,"nb","Settled","Payroll " + mon);
+  }
+  add(addDays(T0,-3),"v6","vendor",18500,"upi","Refunded","INV-BP-0412",{ reason:"The name at the bank didn't match. The full amount was returned to your account." });
+  add(T0,"v1","vendor",64000,"card","Processing","INV-2318");
+  txns.sort((a,b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  const nextDay = day => { let d = new Date(T0.getFullYear(), T0.getMonth(), day); if (d <= T0) d = new Date(T0.getFullYear(), T0.getMonth()+1, day); return ymd(d); };
+  const schedules = [
+    { id:"s1", vid:"v2", cat:"rent",      amount:45000_00,  method:"card", freq:"monthly",   next:nextDay(1),  ref:"Office rent", active:true },
+    { id:"s2", vid:"v3", cat:"gst",       amount:42300_00,  method:"nb",   freq:"monthly",   next:nextDay(20), ref:"GSTR-3B payment", active:true },
+    { id:"s3", vid:"v4", cat:"vendor",    amount:22000_00,  method:"upi",  freq:"monthly",   next:nextDay(5),  ref:"Logistics retainer", active:true },
+    { id:"s4", vid:"v1", cat:"vendor",    amount:184500_00, method:"card", freq:"once",      next:ymd(addDays(T0,6)), ref:"INV-2291 (Net 30)", active:true },
+    { id:"s5", vid:"v8", cat:"tax",       amount:9200_00,   method:"nb",   freq:"monthly",   next:nextDay(7),  ref:"TDS 194C", active:true },
+    { id:"s6", vid:"v9", cat:"salary",    amount:186000_00, method:"nb",   freq:"monthly",   next:ymd(new Date(T0.getFullYear(), T0.getMonth()+1, 0)), ref:"Shop-floor payroll", active:true },
+    { id:"s7", vid:"v5", cat:"education", amount:28000_00,  method:"card", freq:"quarterly", next:ymd(new Date(T0.getFullYear(), T0.getMonth()+2, 10)), ref:"Term fee", active:true },
+    { id:"s8", vid:"v7", cat:"utility",   amount:13500_00,  method:"upi",  freq:"monthly",   next:nextDay(15), ref:"Electricity bill", active:false },
+  ];
+  // Open dues, auto-collected from BBPS, uploaded invoices and the GST / EPFO / ESIC portals.
+  const due = n => ymd(addDays(T0, n));
+  const dues = [
+    { id:"d1",  vid:"v7",  cat:"utility", amount:13640_00,  due:due(3),  ref:"Bill 7781-1125 · fetched via BBPS" },
+    { id:"d2",  vid:"v10", cat:"utility", amount:2180_00,   due:due(5),  ref:"Bill Nov 2026 · fetched via BBPS" },
+    { id:"d3",  vid:"v11", cat:"utility", amount:2359_00,   due:due(2),  ref:"Bill Nov 2026 · fetched via BBPS" },
+    { id:"d4",  vid:"v12", cat:"utility", amount:3245_00,   due:due(6),  ref:"Bill Nov 2026 · fetched via BBPS" },
+    { id:"d5",  vid:"v1",  cat:"vendor",  amount:184500_00, due:due(6),  ref:"INV-2312 · steel coils", tdsNote:"No TDS on purchase of goods" },
+    { id:"d6",  vid:"v4",  cat:"vendor",  amount:22000_00,  due:due(4),  ref:"INV-SL-889 · transport", tdsSec:"194C", tdsRate:2 },
+    { id:"d7",  vid:"v13", cat:"vendor",  amount:35000_00,  due:due(8),  ref:"INV-RA-104 · audit fees", tdsSec:"194J", tdsRate:10 },
+    { id:"d8",  vid:"v2",  cat:"rent",    amount:45000_00,  due:due(9),  ref:"Office rent · Dec 2026", tdsSec:"194I", tdsRate:10 },
+    { id:"d9",  vid:"v3",  cat:"gst",     amount:42300_00,  due:ymd(new Date(T0.getFullYear(), T0.getMonth() + (T0.getDate() < 20 ? 0 : 1), 20)), ref:"GSTR-3B · net liability after ITC" },
+    { id:"d10", vid:"v14", cat:"pf",      amount:26400_00,  due:ymd(new Date(T0.getFullYear(), T0.getMonth() + (T0.getDate() < 15 ? 0 : 1), 15)), ref:"ECR · 12 employees" },
+    { id:"d11", vid:"v15", cat:"esi",     amount:4650_00,   due:ymd(new Date(T0.getFullYear(), T0.getMonth() + (T0.getDate() < 15 ? 0 : 1), 15)), ref:"Monthly contribution · 12 employees" },
+    { id:"d12", vid:"v16", cat:"pt",      amount:2400_00,   due:due(18), ref:"12 employees × ₹200" },
+  ];
+  return { vendors, txns, schedules, dues, turnover:3.8e7, plan:"micro", billing:"monthly", tipHidden:false, seq:900 };
+}
+let S;
+function load(){ try { const raw = localStorage.getItem(KEY); if (raw){ const s = JSON.parse(raw); if (s && s.v === T0.toDateString()) return s; } } catch(e){} const s = seed(); s.v = T0.toDateString(); return s; }
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+S = load();
+
+const vendor = id => S.vendors.find(v => v.id === id) || { name:"Unknown", c:"#555", cb:"#eee", cat:"vendor", type:"govt" };
+const initials = n => n.replace(/[^A-Za-z ]/g,"").split(/\s+/).filter(Boolean).slice(0,2).map(w => w[0]).join("").toUpperCase();
+const avatar = v => `<span class="av" style="--c:${v.c};--cb:${v.cb}">${esc(initials(v.name))}</span>`;
+const destOf = v => v.type === "bank" ? (v.acct === "BULK" ? "12 employee bank accounts" : `A/c •• ${v.acct.slice(-4)} · ${v.ifsc}`) : v.type === "upi" ? v.vpa : v.type === "biller" ? `Consumer no. ${v.consumer}` : "Government challan";
+const statusBadge = s => ({ Settled:'<span class="badge b-ok">Paid</span>', Processing:'<span class="badge b-sky">Processing</span>', Refunded:'<span class="badge b-warn">Refunded</span>' })[s] || s;
+const mLabel = m => METHODS[m].label;
+const thisMonth = ymd(T0).slice(0,7);
+const live = t => t.status === "Settled" || t.status === "Processing";
+
+/* ================= shell ================= */
+const NAV = [
+  ["home","Home","home"],["dues","Pay all dues","bolt"],["pay","Single payment","send"],["scheduled","Autopay","cal"],["vendors","Vendors","users"],["activity","Activity","list"],
+  ["grp","Business"],["reports","Reports & compliance","chart"],["plans","Plans","layers"],["about","About XORPAY","info"],
+];
+const TABS = [["home","Home","home"],["scheduled","Autopay","cal"],["dues","Pay dues","bolt"],["activity","Activity","list"],["more","More","more"]];
+function renderNav(cur){
+  $("#nav").innerHTML = NAV.map(n => n[0] === "grp" ? `<div class="grp">${n[1]}</div>` :
+    `<a href="#${n[0]}" class="${n[0]===cur?"on":""}" ${n[0]===cur?'aria-current="page"':""}>${I(n[2])}${n[1]}</a>`).join("");
+  const moreOn = ["pay","vendors","reports","plans","about"].includes(cur);
+  $("#tabbar").innerHTML = TABS.map(t => t[0] === "more"
+    ? `<button data-action="more" class="${moreOn?"on":""}">${I(t[2])}${t[1]}</button>`
+    : `<a href="#${t[0]}" class="${t[0]===cur?"on":""} ${t[0]==="dues"?"paybtn":""}">${I(t[2])}${t[1]}</a>`).join("");
+  const p = PLANS.find(p => p.id === S.plan);
+  $("#side-plan").textContent = p.name + " plan" + (p.price ? " · ₹" + nf0.format(p.price) + "/mo" : "");
+}
+let W = null; // pay wizard state
+function route(){
+  const h = (location.hash || "#home").slice(1);
+  const view = V[h] ? h : "home";
+  renderNav(view);
+  $("#main").innerHTML = `<div class="view">${V[view]()}</div>`;
+  A[view] && A[view]();
+  window.scrollTo({ top:0 });
+}
+const V = {}, A = {};
+
+/* ================= Home ================= */
+const openDues = () => S.dues.filter(d => !d.paid);
+const groupOf = d => d.cat === "utility" ? "bbps" : GOVT.includes(d.cat) ? "govt" : "vendor";
+V.home = () => {
+  const od = openDues();
+  const sum = f => od.filter(f).reduce((s,d) => s + d.amount, 0);
+  const total = sum(() => true) || 1, bb = sum(d => groupOf(d) === "bbps"), vn = sum(d => groupOf(d) === "vendor"), gv = sum(d => groupOf(d) === "govt");
+  const tdsDue = od.reduce((s,d) => s + tdsFor(d), 0);
+  const comp = [["gst","GST (GSTR-3B)"],["tds","TDS"],["pf","PF (EPFO)"],["esi","ESI"],["pt","Professional tax"]].map(([k,l]) => {
+    if (k === "tds") return [l, tdsDue ? `<span class="badge b-warn">${inr0(tdsDue)} to deduct</span>` : '<span class="badge b-ok">Up to date</span>', tdsDue ? "Deducted and paid with your vendor dues" : "Nothing pending"];
+    const d = od.find(x => x.cat === k);
+    return [l, d ? `<span class="badge ${daysTo(d.due) <= 5 ? "b-warn" : "b-sky"}">${when(d.due)}</span>` : '<span class="badge b-ok">Paid</span>', d ? `${inr0(d.amount)} due ${fD(d.due)}` : "Filed and paid this month"];
+  });
+  const up = S.schedules.filter(s => s.active).sort((a,b) => a.next.localeCompare(b.next)).slice(0,4);
+  const recent = S.txns.slice(0,4);
+  const h = new Date().getHours();
+  const greet = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  return `
+  <div class="page-h"><div><h1>${greet}</h1><p>Your bills, vendors, taxes and compliances, all in one place.</p></div>
+    <a class="btn pri lg hide-sm" href="#dues">${I("bolt")}Pay all dues</a></div>
+
+  ${S.tipHidden ? "" : `<div class="tip"><span class="ico">${I("sparkle")}</span><div class="grow"><b>Pay everything in one transaction.</b><p class="ink2 small">XORPAY collects your BBPS bills, vendor invoices, GST, TDS, PF, ESI and professional tax. Tick what to pay, approve once, and we split it to every payee.</p></div>
+    <a class="btn pri sm" href="#dues">Try it</a><button class="x" data-action="hide-tip" aria-label="Dismiss tip">${I("x")}</button></div>`}
+
+  <div class="home-top">
+    <section class="hero">
+      <div><div class="label">Due in the next 30 days</div>
+        <div class="money" style="margin-top:12px">${od.length ? inr0(total) : "₹0"}</div>
+        <p style="margin-top:10px">${od.length ? `${od.length} payments across bills, vendors and government. Pay them all with one debit.` : "You're all caught up. Nothing is due."}</p></div>
+      ${od.length ? `<div>
+        <div class="split"><i style="width:${(bb/total*100).toFixed(1)}%;background:#FBBF24"></i><i style="width:${(vn/total*100).toFixed(1)}%;background:#A78BFA"></i><i style="width:${(gv/total*100).toFixed(1)}%;background:#34D399"></i></div>
+        <div class="split-legend" style="margin-top:14px">
+          <div><span class="sw" style="background:#FBBF24"></span>Bills (BBPS)<b>${inr0(bb)}</b></div>
+          <div><span class="sw" style="background:#A78BFA"></span>Vendors & rent<b>${inr0(vn)}</b></div>
+          <div><span class="sw" style="background:#34D399"></span>Taxes & compliance<b>${inr0(gv)}</b></div>
+        </div>
+        <a class="btn lg" href="#dues" style="margin-top:22px;background:#fff;color:var(--deep);border-color:#fff">${I("bolt")}Pay all in one transaction</a>
+      </div>` : ""}
+    </section>
+    <section class="card">
+      <div class="card-h"><h2>Compliance this month</h2><a class="btn link small" href="#reports">Details</a></div>
+      <div class="list">${comp.map(([l,b,s]) => `<div class="item"><span class="ico" style="width:34px;height:34px;border-radius:10px">${I("shield")}</span><div class="grow"><b>${l}</b><span>${s}</span></div>${b}</div>`).join("")}</div>
+    </section>
+  </div>
+
+  <div class="quick">
+    ${[["dues","Pay all dues","One transaction for everything","bolt"],["utility","Pay a bill","Electricity, water, internet via BBPS","plug"],["vendor","Pay a vendor","TDS deducted automatically","box"],["schedule","Set up autopay","Rent, salaries, taxes","cal"]].map(([k,t,s,ic]) =>
+      `<button class="qa" data-action="${k==="dues"?"go-dues":k==="schedule"?"new-schedule":"start-pay"}" data-cat="${k}"><span class="ico">${I(ic)}</span><b>${t}</b><span class="s">${s}</span></button>`).join("")}
+  </div>
+
+  <div class="two">
+    <section class="card"><div class="card-h"><h2>Autopay coming up</h2><a class="btn link small" href="#scheduled">See all</a></div>
+      <div class="list">${up.map(s => { const v = vendor(s.vid), d = parse(s.next), soon = daysTo(s.next) <= 3; return `
+        <div class="item"><div class="date ${soon?"soon":""}"><small>${d.toLocaleDateString("en-IN",{month:"short"})}</small><b>${d.getDate()}</b></div>
+          <div class="grow"><b>${esc(v.name)}</b><span>${esc(s.ref)} · ${when(s.next)}</span></div>
+          <div class="amt">${inr0(s.amount)}<span>${mLabel(s.method)}</span></div></div>`; }).join("")}</div></section>
+    <section class="card"><div class="card-h"><h2>Recent payments</h2><a class="btn link small" href="#activity">See all</a></div>
+      <div class="list">${recent.map(txnItem).join("")}</div></section>
+  </div>`;
+};
+function txnItem(t){
+  const v = vendor(t.vid);
+  return `<div class="item click" data-action="txn" data-id="${t.id}" tabindex="0" role="button">${avatar(v)}
+    <div class="grow"><b>${esc(v.name)}</b><span>${fD(t.date)} · ${t.batch ? "Batch " + t.batch : mLabel(t.method)}</span></div>
+    <div class="amt">${inr0(t.payee)}<span>${statusBadge(t.status)}</span></div></div>`;
+}
+
+/* ================= Pay all dues (one transaction) ================= */
+let B = null;
+const GROUPS = [["bbps","Bills via BBPS","Fetched automatically from your billers"],["vendor","Vendors & rent","TDS is worked out and deducted for you"],["govt","Taxes & compliance","GST, PF, ESI and professional tax"]];
+function batchCalc(){
+  const items = S.dues.filter(d => !d.paid && B.sel.includes(d.id));
+  const lines = items.map(d => ({ d, v: vendor(d.vid), tds: tdsFor(d), net: d.amount - tdsFor(d), group: groupOf(d) }));
+  const tdsLines = lines.filter(l => l.tds);
+  const payouts = lines.map(l => ({ vid:l.d.vid, cat:l.d.cat, amount:l.net, ref:l.d.ref + (l.tds ? ` · TDS ${l.d.tdsSec} ${inr0(l.tds)} deducted` : ""), due:l.d.id }));
+  const tdsTotal = tdsLines.reduce((s,l) => s + l.tds, 0);
+  if (tdsTotal) payouts.push({ vid:"v8", cat:"tax", amount:tdsTotal, ref:"Challan 281 · TDS " + [...new Set(tdsLines.map(l => l.d.tdsSec))].join(", "), tds:true });
+  const qs = payouts.map(p => quote(p.amount, B.method));
+  const fee = qs.reduce((s,q) => s + q.fee, 0), gst = qs.reduce((s,q) => s + q.gst, 0);
+  const gross = lines.reduce((s,l) => s + l.d.amount, 0);
+  const by = g => lines.filter(l => l.group === g).reduce((s,l) => s + l.net, 0);
+  return { lines, tdsLines, payouts, qs, tdsTotal, fee, gst, gross, total: gross + fee + gst, by };
+}
+V.dues = () => {
+  if (!B) B = { step:"select", sel: openDues().map(d => d.id), method:"nb", batch:null };
+  B.sel = B.sel.filter(id => S.dues.some(d => d.id === id && !d.paid));
+  if (B.step === "done" || B.step === "processing") return duesProcessing();
+  if (B.step === "review") return duesReview();
+  const od = openDues();
+  const c = batchCalc();
+  const row = d => { const v = vendor(d.vid), on = B.sel.includes(d.id), t = tdsFor(d); return `
+    <label class="due ${on?"on":""}"><input type="checkbox" data-due="${d.id}" ${on?"checked":""}><span class="cb">${I("check")}</span>${avatar(v)}
+      <div class="grow"><b>${esc(v.name)}</b><span>${esc(d.ref)}</span>
+        ${t ? `<span class="tds">TDS ${d.tdsSec} @ ${d.tdsRate}%: ${inr0(t)} goes to Income Tax · vendor gets ${inr0(d.amount - t)}</span>` : d.tdsNote ? `<span class="tds no">${d.tdsNote}</span>` : ""}</div>
+      <div class="amt">${inr0(d.amount)}<span class="${daysTo(d.due)<=3?"soon-t":""}">Due ${fD(d.due)}</span></div></label>`; };
+  return `
+  <div class="page-h"><div><h1>Pay all dues</h1><p>Every bill, vendor invoice, tax and compliance payment, settled with <b>one transaction</b> from your account.</p></div>
+    <button class="btn" data-action="sel-all">${B.sel.length === od.length ? "Clear all" : "Select all"}</button></div>
+  ${od.length ? GROUPS.map(([g,t,s]) => { const rows = od.filter(d => groupOf(d) === g); if (!rows.length) return ""; return `
+    <section class="card"><div class="card-h"><div><h2>${t}</h2><p class="muted small" style="margin-top:2px">${s}</p></div><span class="badge b-mute">${rows.length}</span></div>
+      <div class="dues">${rows.map(row).join("")}</div></section>`; }).join("")
+    : `<section class="card"><div class="empty"><div class="check" style="margin:0 auto 14px">${I("check")}</div><b style="color:var(--ink)">All dues are paid.</b><br>New bills and invoices will show up here automatically.</div></section>`}
+  ${od.length ? `<div class="wiz-foot"><div class="grow"><span class="muted small">${B.sel.length} selected${c.tdsTotal ? ` · TDS ${inr0(c.tdsTotal)} included` : ""}</span><b>${inr(c.gross)}</b></div>
+    <button class="btn pri lg" data-action="dues-review" ${B.sel.length ? "" : "disabled"}>Review${I("arrowR")}</button></div>` : ""}`;
+};
+function duesReview(){
+  const c = batchCalc();
+  const upiOk = c.gross <= 500000_00;
+  if (!upiOk && B.method === "upi") B.method = "nb";
+  const secs = {}; c.tdsLines.forEach(l => secs[l.d.tdsSec] = (secs[l.d.tdsSec]||0) + l.tds);
+  return `<div class="wizard">
+  <div class="page-h"><div><h1>One transaction, ${c.payouts.length} payments</h1><p>You approve one debit. XORPAY splits it and pays everyone below on the same day.</p></div><button class="btn link small" data-action="dues-back">Edit selection</button></div>
+  <section class="card"><div class="receipt">
+    ${c.by("bbps") ? `<div class="line"><span>Bills via BBPS (${c.lines.filter(l=>l.group==="bbps").length})</span><span>${inr(c.by("bbps"))}</span></div>` : ""}
+    ${c.by("vendor") ? `<div class="line"><span>Vendors & rent, after TDS (${c.lines.filter(l=>l.group==="vendor").length})</span><span>${inr(c.by("vendor"))}</span></div>` : ""}
+    ${c.tdsTotal ? `<div class="line"><span>TDS to Income Tax Dept (${Object.entries(secs).map(([k,v]) => `${k} ${inr0(v)}`).join(", ")})</span><span>${inr(c.tdsTotal)}</span></div>` : ""}
+    ${c.by("govt") ? `<div class="line"><span>GST, PF, ESI & professional tax (${c.lines.filter(l=>l.group==="govt").length})</span><span>${inr(c.by("govt"))}</span></div>` : ""}
+    <div class="line"><span>Card fee + GST</span><span>${c.fee ? inr(c.fee + c.gst) : "Free"}</span></div>
+    <div class="line total"><span>One debit of</span><span>${inr(c.total)}</span></div>
+  </div></section>
+  <section class="card"><h2>Pay with</h2><p class="ink2 small" style="margin:4px 0 16px">Net banking and UPI are free. Credit card costs 2% + GST and gives you up to 45 days to pay the bank.</p>
+    <div class="choices">${Object.entries(METHODS).map(([k,m]) => { const dis = k === "upi" && !upiOk; return `
+      <button class="choice ${k===B.method?"on":""}" data-action="dues-method" data-m="${k}" ${dis?"disabled style=\"opacity:.5;pointer-events:none\"":""}><span class="ico" style="${k==="card"?"":"background:var(--sky-soft);color:var(--sky)"}">${I(m.icon)}</span>
+        <div class="grow"><b>${m.label}</b><span>${dis ? "UPI allows up to ₹5 L per transaction" : m.perk}</span></div>
+        <span class="badge ${k==="card"?"b-brand":"b-ok"}">${m.fee}</span><span class="radio"></span></button>`; }).join("")}</div></section>
+  <div class="note ok">${I("shield")}<span>TDS challans, GST and EPFO/ESIC receipts are saved to Reports automatically. Form 16A data is ready for each vendor at quarter end.</span></div>
+  <div class="wiz-foot"><button class="btn" data-action="dues-back" aria-label="Back">${I("arrowL")}<span class="hide-sm">Back</span></button>
+    <div class="grow"><span class="muted small">One debit</span><b>${inr(c.total)}</b></div>
+    <button class="btn pri lg" data-action="dues-pay">Pay ${short(c.total)}</button></div></div>`;
+}
+function duesProcessing(){
+  const b = B.batch;
+  return `<div class="wizard">
+  <section class="card"><div class="done" id="batch-top">
+    ${B.step === "done" ? `<div class="check" style="margin:0 auto 6px">${I("check")}</div><p class="label">All ${b.items.length} payments done</p>` : `<p class="label" id="batch-label">Paying ${b.items.length} payees…</p>`}
+    <div class="money" style="font-size:40px">${inr(b.total)}</div>
+    <p class="muted small">One transaction · Batch ${b.id} · ${mLabel(b.method)}</p></div>
+    <div class="list" style="margin-top:8px">${b.items.map((it,i) => { const v = vendor(it.vid); const ok = B.step === "done"; return `
+      <div class="item bp ${ok?"ok":""}" data-i="${i}">${avatar(v)}<div class="grow"><b>${esc(v.name)}</b><span class="ref">${ok ? esc(it.refNo) : esc(it.via)}</span></div>
+        <div class="amt">${inr0(it.amount)}</div><span class="st-ic">${I("check")}</span></div>`; }).join("")}</div>
+    ${B.step === "done" ? `<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px"><a class="btn" href="#activity">View in Activity</a><a class="btn pri" href="#home" data-action="dues-finish">Back to home</a></div>` : ""}
+  </section></div>`;
+}
+function runBatch(){
+  const c = batchCalc(); S.seq++;
+  const id = "XB" + (70210 + S.seq);
+  const items = c.payouts.map((p,i) => {
+    const v = vendor(p.vid), q = c.qs[i];
+    const via = p.tds ? "Challan 281 via OLTAS" : p.cat === "utility" ? "BBPS" : p.cat === "gst" ? "GST PMT-06 challan" : p.cat === "pf" ? "EPFO ECR" : p.cat === "esi" ? "ESIC challan" : p.cat === "pt" ? "TS PT challan" : v.type === "upi" ? "UPI to " + v.vpa : "IMPS to " + destOf(v);
+    const n = 442000000000 + (S.seq*100 + i)*7919;
+    const refNo = p.tds || GOVT.includes(p.cat) ? "CIN " + (26110000000 + n % 9999999) : p.cat === "utility" ? "BBPS ref XB" + (n % 99999999) : "UTR " + n;
+    return { ...p, ...q, via, refNo };
+  });
+  B.batch = { id, items, method:B.method, total:c.total };
+  items.forEach(it => S.txns.unshift({ id:"XP" + (5300000 + S.seq*41 + items.indexOf(it)), date: ymd(T0), vid:it.vid, cat:it.cat, method:B.method, payee:it.payee, fee:it.fee, gst:it.gst, total:it.total, status:"Settled", ref:it.ref, utr:it.refNo.replace(/^\w+ /,""), coins:coinsFor(it.payee, B.method), batch:id }));
+  S.dues.forEach(d => { if (B.sel.includes(d.id)) d.paid = true; });
+  save();
+  B.step = "processing"; route();
+  let i = 0; const rows = () => document.querySelectorAll(".bp");
+  const tick = () => {
+    if (!$("#batch-top")) return;
+    rows().forEach((el,k) => { el.classList.toggle("ok", k < i); el.classList.toggle("act", k === i); if (k < i) el.querySelector(".ref").textContent = items[k].refNo; });
+    const lab = $("#batch-label"); if (lab) lab.textContent = `Paying ${Math.min(i+1, items.length)} of ${items.length}…`;
+    if (i < items.length){ i++; setTimeout(tick, 320); return; }
+    B.step = "done"; route();
+  };
+  tick();
+}
+
+/* ================= Pay wizard ================= */
+const newW = (o={}) => Object.assign({ step:1, cat:"vendor", vid:"", amount:"", ref:"", method:"upi", mode:"now", freq:"monthly", start: ymd(addDays(T0,1)), done:null }, o);
+V.pay = () => {
+  if (!W) W = newW();
+  const steps = ["Who you're paying","Amount & method","Review"];
+  const head = W.done ? "" : `<div class="progress">${steps.map((s,i) => `<div class="${i < W.step ? "on" : ""}"><i></i><span class="${i+1===W.step?"":"hide-sm"}">${i+1}. ${s}</span></div>`).join("")}</div>`;
+  const body = W.done ? payDone() : W.step === 1 ? step1() : W.step === 2 ? step2() : step3();
+  return `<div class="wizard">
+    <div class="page-h"><h1>${W.done ? "Payment status" : W.mode === "schedule" ? "Schedule a payment" : "Make a payment"}</h1>${W.done ? "" : `<button class="btn link small" data-action="cancel-pay">Cancel</button>`}</div>
+    ${head}${body}</div>`;
+};
+function step1(){
+  const payees = S.vendors.filter(v => v.cat === W.cat);
+  if (!payees.some(v => v.id === W.vid)) W.vid = (payees.find(v => v.verified) || payees[0] || {}).id || "";
+  const sel = W.vid ? vendor(W.vid) : null;
+  return `
+  <section class="card"><h2>What is this payment for?</h2><p class="ink2 small" style="margin:4px 0 16px">Choose a category. It decides which details we ask for.</p>
+    <div class="tiles">${Object.entries(CATS).map(([k,c]) => `<button class="tile ${k===W.cat?"on":""}" data-action="cat" data-cat="${k}"><span class="ico">${I(c.icon)}</span><b>${c.short}</b></button>`).join("")}</div></section>
+  <section class="card"><div class="card-h"><h2>Who are you paying?</h2><button class="btn sm" data-action="add-vendor">${I("plus")}New payee</button></div>
+    <div class="choices">${payees.length ? payees.map(v => `
+      <button class="choice ${v.id===W.vid?"on":""}" data-action="pick-payee" data-id="${v.id}">${avatar(v)}
+        <div class="grow"><b>${esc(v.name)}</b><span>${esc(destOf(v))}</span></div>
+        ${v.verified ? '<span class="badge b-ok hide-sm">Verified</span>' : '<span class="badge b-warn">Not verified</span>'}<span class="radio"></span></button>`).join("")
+      : `<div class="empty">No saved payees for ${CATS[W.cat].label.toLowerCase()} yet.<br><button class="btn pri sm" style="margin-top:12px" data-action="add-vendor">${I("plus")}Add a payee</button></div>`}</div>
+    ${sel && !sel.verified ? `<div class="note warn" style="margin-top:14px">${I("info")}<span>We check every payee with their bank before money moves. <button class="btn link small" style="padding:0" data-action="verify" data-id="${sel.id}">Verify ${esc(sel.name)} now</button></span></div>` : ""}
+  </section>
+  <div class="wiz-foot"><div class="grow"><span class="muted small">Step 1 of 3</span></div><button class="btn pri lg" data-action="next" ${sel && sel.verified ? "" : "disabled"}>Continue${I("arrowR")}</button></div>`;
+}
+function step2(){
+  const v = vendor(W.vid);
+  return `
+  <section class="card">
+    <div class="review-head" style="margin-bottom:20px">${avatar(v)}<div style="min-width:0"><b>${esc(v.name)}</b><div class="muted small">${esc(destOf(v))}</div></div><button class="btn link small" style="margin-left:auto" data-action="goto" data-step="1">Change</button></div>
+    <label class="label" for="f-amt" style="display:block;text-align:center;margin-bottom:10px">Amount they will receive</label>
+    <div class="amount-wrap"><span>₹</span><input id="f-amt" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(W.amount)}"></div>
+    <div class="quick-amt" style="margin-top:14px">${[10000,25000,50000,100000].map(a => `<button class="pillbtn" data-action="amt" data-amt="${a}">${short(a*100)}</button>`).join("")}</div>
+    <p class="err-t" id="amt-err" style="text-align:center;margin-top:10px"></p>
+    <div class="field" style="margin-top:10px"><label for="f-ref">${CATS[W.cat].ref} <span class="muted">(optional)</span></label><input class="input" id="f-ref" placeholder="e.g. ${esc(CATS[W.cat].ph)}" value="${esc(W.ref)}"></div>
+  </section>
+  <section class="card"><h2>How do you want to pay?</h2><p class="ink2 small" style="margin:4px 0 16px">UPI and net banking are free. Credit card costs 2% + GST and gives you up to 45 days to pay the bank.</p>
+    <div class="choices">${Object.entries(METHODS).map(([k,m]) => `
+      <button class="choice ${k===W.method?"on":""}" data-action="method" data-m="${k}"><span class="ico" style="${k==="card"?"":"background:var(--sky-soft);color:var(--sky)"}">${I(m.icon)}</span>
+        <div class="grow"><b>${m.label}</b><span>${m.perk}</span></div>
+        <span class="badge ${k==="card"?"b-brand":"b-ok"}">${m.fee}</span><span class="radio"></span></button>`).join("")}</div>
+  </section>
+  <section class="card"><div class="card-h" style="flex-wrap:wrap"><h2>When?</h2>
+      <div class="seg"><button class="${W.mode==="now"?"on":""}" data-action="mode" data-v="now">Pay now</button><button class="${W.mode==="schedule"?"on":""}" data-action="mode" data-v="schedule">Schedule</button></div></div>
+    ${W.mode === "schedule" ? `<div class="form-2">
+      <div class="field"><label for="f-freq">How often</label><select class="select" id="f-freq">${Object.entries(FREQ).map(([k,l]) => `<option value="${k}" ${k===W.freq?"selected":""}>${l}</option>`).join("")}</select></div>
+      <div class="field"><label for="f-start">First payment</label><input class="input" type="date" id="f-start" min="${ymd(addDays(T0,1))}" value="${W.start}"></div></div>
+      <p class="hint" style="margin-top:12px">We'll remind you a day before and pay automatically at 9:00 AM on the due date.</p>`
+    : `<p class="ink2 small">The payment goes out right away. Most payees receive it within minutes.</p>`}
+  </section>
+  <div class="wiz-foot"><button class="btn" data-action="goto" data-step="1" aria-label="Back">${I("arrowL")}<span class="hide-sm">Back</span></button>
+    <div class="grow"><span class="muted small">You pay</span><b id="foot-total">₹0.00</b></div>
+    <button class="btn pri lg" data-action="next" id="next2" disabled>Review${I("arrowR")}</button></div>`;
+}
+const amtPaise = () => Math.round((parseFloat(W.amount) || 0) * 100);
+const remainingLimit = () => MONTHLY_LIMIT - S.txns.filter(t => t.date.startsWith(thisMonth) && live(t)).reduce((s,t) => s + t.payee, 0);
+function step2Update(){
+  const p = amtPaise(), q = quote(p, W.method), rem = remainingLimit();
+  $("#foot-total").textContent = inr(q.total);
+  $("#amt-err").textContent = p && p < 100_00 ? "The minimum payment is ₹100." : p > rem ? `That's more than your remaining limit this month (${inr0(rem)}).` : "";
+  $("#next2").disabled = !(p >= 100_00 && p <= rem);
+}
+A.pay = () => {
+  if (W.done || W.step !== 2) return;
+  const amt = $("#f-amt");
+  amt.addEventListener("input", () => { amt.value = amt.value.replace(/[^\d.]/g,""); W.amount = amt.value; step2Update(); });
+  $("#f-ref").addEventListener("input", e => W.ref = e.target.value);
+  const fq = $("#f-freq"); fq && fq.addEventListener("change", e => W.freq = e.target.value);
+  const fs = $("#f-start"); fs && fs.addEventListener("change", e => W.start = e.target.value);
+  step2Update();
+};
+function step3(){
+  const v = vendor(W.vid), p = amtPaise(), q = quote(p, W.method), sch = W.mode === "schedule";
+  const repay = addDays(T0, 45).toLocaleDateString("en-IN",{day:"numeric",month:"long"});
+  return `
+  <section class="card">
+    <div class="review-head">${avatar(v)}<div style="min-width:0"><b>${esc(v.name)}</b><div class="muted small">${esc(destOf(v))}</div></div><span class="badge b-ok" style="margin-left:auto">Verified</span></div>
+    <div class="receipt">
+      <div class="line"><span>They receive</span><span>${inr(q.payee)}</span></div>
+      <div class="line"><span>Paying with</span><span>${METHODS[W.method].label} · ${METHODS[W.method].sub}</span></div>
+      <div class="line"><span>Card fee (2%)</span><span>${q.fee ? inr(q.fee) : "Free"}</span></div>
+      <div class="line"><span>GST on fee (18%)</span><span>${q.gst ? inr(q.gst) : "—"}</span></div>
+      <div class="line"><span>${CATS[W.cat].label}</span><span>${esc(W.ref || "No reference")}</span></div>
+      <div class="line"><span>When</span><span>${sch ? `${FREQ[W.freq]}, from ${fDY(W.start)}` : "Now"}</span></div>
+      <div class="line total"><span>${sch ? "Each payment" : "Total"}</span><span>${inr(q.total)}</span></div>
+    </div>
+  </section>
+  ${W.method === "card" ? `<div class="note brand">${I("card")}<span>Your card is charged now and you repay HDFC by around <b>${repay}</b>. You also earn <b>${nf0.format(coinsFor(p,"card"))} XOR coins</b>, and the ${inr0(q.gst)} GST on the fee can be claimed as input tax credit.</span></div>`
+    : `<div class="note ok">${I("check")}<span>No fees. ${METHODS[W.method].label} payments are always free on XORPAY.</span></div>`}
+  <p class="hint" style="text-align:center">Money moves through Cashfree, an RBI-authorised payment aggregator. XORPAY never holds your funds.</p>
+  <div class="wiz-foot"><button class="btn" data-action="goto" data-step="2" aria-label="Back">${I("arrowL")}<span class="hide-sm">Back</span></button>
+    <div class="grow"><span class="muted small">${sch ? "Each payment" : "You pay"}</span><b>${inr(q.total)}</b></div>
+    <button class="btn pri lg" data-action="${sch ? "confirm-schedule" : "confirm-pay"}">${sch ? "Confirm schedule" : "Pay now"}</button></div>`;
+}
+function payDone(){
+  const t = S.txns.find(x => x.id === W.done), v = vendor(t.vid);
+  const steps = [["Payment authorised", `${mLabel(t.method)} · ${METHODS[t.method].sub}`],["Received by payment partner","Held by the RBI-regulated aggregator, not XORPAY"],["Sent to payee", v.type === "upi" ? `UPI transfer to ${v.vpa}` : `Bank transfer to ${destOf(v)}`],["Credited", "Bank reference issued"]];
+  return `<section class="card"><div class="done">
+    <div id="done-top"><p class="label">Sending to ${esc(v.name)}</p><div class="money" style="font-size:40px;margin-top:6px">${inr(t.payee)}</div></div>
+    <div class="track" id="track">${steps.map((s,i) => `<div class="st"><span class="b">${I("check")}</span><div><b>${s[0]}</b><span>${esc(s[1])}</span></div></div>`).join("")}</div>
+    <div id="done-actions" style="margin-top:20px"></div></div></section>`;
+}
+function startProcessing(){
+  const t = S.txns.find(x => x.id === W.done); let i = 0;
+  const tick = () => {
+    if (!$("#track")) return;
+    document.querySelectorAll("#track .st").forEach((el,k) => { el.classList.toggle("ok", k < i); el.classList.toggle("act", k === i); });
+    if (i < 4){ i++; setTimeout(tick, 700); return; }
+    t.status = "Settled"; S.seq++; t.utr = "UTR" + (442000000000 + S.seq*7919); t.coins = coinsFor(t.payee, t.method); save();
+    $("#done-top").insertAdjacentHTML("afterbegin", `<div class="check" style="margin:0 auto 14px">${I("check")}</div>`);
+    $("#done-top .label").textContent = "Paid to " + vendor(t.vid).name;
+    $("#done-actions").innerHTML = `<p class="muted small">Bank reference ${t.utr}${t.coins ? ` · +${t.coins} XOR coins` : ""}</p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:16px"><button class="btn" data-action="txn" data-id="${t.id}">View receipt</button><button class="btn" data-action="pay-again">Make another payment</button><a class="btn pri" href="#home" data-action="finish">Back to home</a></div>`;
+  };
+  tick();
+}
+
+/* ================= Scheduled ================= */
+V.scheduled = () => {
+  const act = S.schedules.filter(s => s.active).sort((a,b) => a.next.localeCompare(b.next));
+  const in30 = act.filter(s => daysTo(s.next) <= 30);
+  const groups = [["This week", s => daysTo(s.next) <= 7], ["Later this month", s => daysTo(s.next) > 7 && daysTo(s.next) <= 30], ["Later", s => daysTo(s.next) > 30]];
+  const row = s => { const v = vendor(s.vid), d = parse(s.next); return `
+    <div class="item" style="${s.active?"":"opacity:.55"}"><div class="date ${daysTo(s.next)<=3&&s.active?"soon":""}"><small>${d.toLocaleDateString("en-IN",{month:"short"})}</small><b>${d.getDate()}</b></div>
+      <div class="grow"><b>${esc(v.name)}</b><span>${esc(s.ref)} · ${FREQ[s.freq]} · ${mLabel(s.method)}</span></div>
+      <div class="amt">${inr0(s.amount)}<span>${s.active ? when(s.next) : "Paused"}</span></div>
+      <button class="btn sm hide-sm" data-action="run" data-id="${s.id}" ${s.active?"":"disabled"}>Pay now</button>
+      <button class="toggle ${s.active?"on":""}" data-action="toggle" data-id="${s.id}" role="switch" aria-checked="${s.active}" aria-label="${s.active?"Pause":"Resume"} ${esc(v.name)}"></button></div>`; };
+  const sorted = S.schedules.slice().sort((a,b) => a.next.localeCompare(b.next));
+  return `
+  <div class="page-h"><div><h1>Scheduled payments</h1><p>Set it once. XORPAY pays on the due date and reminds you a day before.</p></div>
+    <button class="btn pri" data-action="new-schedule">${I("plus")}New schedule</button></div>
+  <div class="stats s3">
+    <section class="card stat"><div class="label">Due in the next 30 days</div><span class="money">${inr0(in30.reduce((x,s)=>x+s.amount,0))}</span><p>${in30.length} payments</p></section>
+    <section class="card stat"><div class="label">Next payment</div><span class="money">${act.length ? fD(act[0].next) : "—"}</span><p>${act.length ? esc(vendor(act[0].vid).name) + " · " + inr0(act[0].amount) : "Nothing scheduled"}</p></section>
+    <section class="card stat"><div class="label">Active schedules</div><span class="money">${act.length}</span><p>${S.schedules.length - act.length} paused</p></section>
+  </div>
+  <section class="card">${groups.map(([t,f]) => { const rows = sorted.filter(f); return rows.length ? `<div class="group-t">${t}</div><div class="list" style="margin-bottom:12px">${rows.map(row).join("")}</div>` : ""; }).join("")}</section>`;
+};
+function runSchedule(s){
+  const v = vendor(s.vid);
+  if (!v.verified){ toast(`Verify ${v.name} before paying`); return false; }
+  const q = quote(s.amount, s.method); S.seq++;
+  S.txns.unshift({ id:"XP" + (5200000 + S.seq*41), date: ymd(T0), vid:s.vid, cat:s.cat, method:s.method, ...q, status:"Settled", ref:s.ref, utr:"UTR" + (442000000000 + S.seq*7919), coins:coinsFor(q.payee, s.method), auto:true });
+  if (s.freq === "once") s.active = false;
+  else { const n = parse(s.next), base = n > T0 ? n : T0; s.next = ymd(s.freq === "weekly" ? addDays(base,7) : addMonths(base, s.freq === "quarterly" ? 3 : 1)); }
+  return true;
+}
+
+/* ================= Vendors ================= */
+let vq = "";
+V.vendors = () => `
+  <div class="page-h"><div><h1>Vendors</h1><p>Everyone you pay, checked with their bank before the first rupee moves.</p></div>
+    <button class="btn pri" data-action="add-vendor">${I("plus")}Add vendor</button></div>
+  <section class="card">
+    <div class="toolbar" style="margin-bottom:8px"><div class="search">${I("search")}<input class="input" id="vq" placeholder="Search vendors" value="${esc(vq)}" aria-label="Search vendors"></div></div>
+    <div class="list vlist" id="vlist"></div>
+  </section>`;
+A.vendors = () => {
+  const draw = () => {
+    const rows = S.vendors.filter(v => !vq || (v.name + " " + (v.gstin||"")).toLowerCase().includes(vq.toLowerCase()));
+    $("#vlist").innerHTML = rows.map(v => {
+      const paid = S.txns.filter(t => t.vid === v.id && live(t)).reduce((s,t) => s + t.payee, 0);
+      return `<div class="item">${avatar(v)}
+        <div class="grow"><b>${esc(v.name)}</b>
+          <div class="vmeta"><span class="muted small">${CATS[v.cat].label}</span><span class="code">${esc(destOf(v))}</span>${v.gstin ? `<span class="code hide-sm">GSTIN ${v.gstin}</span>` : ""}</div></div>
+        <div class="amt hide-sm">${inr0(paid)}<span>paid in 6 months</span></div>
+        ${v.verified ? `<span class="badge b-ok hide-sm">Verified</span><button class="btn sm" data-action="pay-vendor" data-id="${v.id}">Pay</button>`
+          : `<button class="btn sm pri" data-action="verify" data-id="${v.id}">${I("shield")}Verify</button>`}</div>`; }).join("") || '<div class="empty">No vendors match your search.</div>';
+  };
+  $("#vq").addEventListener("input", e => { vq = e.target.value; draw(); });
+  draw();
+};
+function addVendorModal(){
+  openModal(`
+    <div class="modal-h"><div><h2>Add a payee</h2><p class="muted small" style="margin-top:4px">We'll confirm the account name with their bank.</p></div><button class="x" data-action="close" aria-label="Close">${I("x")}</button></div>
+    <form id="vform" style="display:flex;flex-direction:column;gap:14px" novalidate>
+      <div class="field"><label for="v-name">Name</label><input class="input" id="v-name" placeholder="e.g. Deccan Fasteners LLP"></div>
+      <div class="form-2">
+        <div class="field"><label for="v-cat">Category</label><select class="select" id="v-cat">${Object.entries(CATS).map(([k,c]) => `<option value="${k}" ${W && W.cat===k?"selected":""}>${c.label}</option>`).join("")}</select></div>
+        <div class="field"><label>Pay to</label><div class="seg" id="v-type"><button type="button" class="on" data-t="bank">Bank account</button><button type="button" data-t="upi">UPI ID</button></div></div>
+      </div>
+      <div class="form-2" id="v-bank">
+        <div class="field"><label for="v-acct">Account number</label><input class="input" id="v-acct" inputmode="numeric" placeholder="9 to 18 digits"></div>
+        <div class="field"><label for="v-ifsc">IFSC</label><input class="input" id="v-ifsc" placeholder="HDFC0001234" style="text-transform:uppercase"></div>
+      </div>
+      <div class="field" id="v-upi" hidden><label for="v-vpa">UPI ID</label><input class="input" id="v-vpa" placeholder="name@okhdfcbank"></div>
+      <div class="field"><label for="v-gstin">GSTIN <span class="muted">(optional)</span></label><input class="input" id="v-gstin" placeholder="36AABCS1429B1ZB" style="text-transform:uppercase"></div>
+      <div id="v-err" class="err-t" role="alert"></div>
+      <div id="v-result"></div>
+      <button class="btn pri lg" type="submit" id="v-submit">${I("shield")}Verify and save</button>
+    </form>`);
+  let type = "bank";
+  $("#v-type").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; type = b.dataset.t; [...$("#v-type").children].forEach(x => x.classList.toggle("on", x === b)); $("#v-bank").hidden = type !== "bank"; $("#v-upi").hidden = type !== "upi"; });
+  $("#vform").addEventListener("submit", e => {
+    e.preventDefault();
+    const name = $("#v-name").value.trim(), cat = $("#v-cat").value, gstin = $("#v-gstin").value.trim().toUpperCase();
+    const acct = $("#v-acct").value.trim(), ifsc = $("#v-ifsc").value.trim().toUpperCase(), vpa = $("#v-vpa").value.trim();
+    let err = "";
+    if (name.length < 3) err = "Enter the name exactly as it appears at their bank.";
+    else if (type === "bank" && !/^\d{9,18}$/.test(acct)) err = "Account number should be 9 to 18 digits.";
+    else if (type === "bank" && !/^[A-Z]{4}0[0-9A-Z]{6}$/.test(ifsc)) err = "IFSC should be 11 characters: 4 letters, a zero, then 6 letters or digits.";
+    else if (type === "upi" && !/^[\w.\-]{2,256}@[a-zA-Z]{2,64}$/.test(vpa)) err = "UPI ID should look like name@bank.";
+    else if (gstin && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) err = "GSTIN should be 15 characters, like 36AABCS1429B1ZB.";
+    $("#v-err").textContent = err; if (err) return;
+    const btn = $("#v-submit"); btn.disabled = true; btn.textContent = "Checking with the bank…";
+    setTimeout(() => {
+      S.seq++;
+      const pal = [["#6C2BD9","#F3EDFE"],["#1D4ED8","#EAF1FE"],["#047857","#E6F6EF"],["#BE185D","#FDEBF3"]][S.seq % 4];
+      const v = { id:"v" + S.seq, name, cat, type, verified:true, c:pal[0], cb:pal[1] };
+      if (type === "bank"){ v.acct = acct; v.ifsc = ifsc; } else v.vpa = vpa;
+      if (gstin) v.gstin = gstin;
+      S.vendors.unshift(v); save();
+      $("#v-result").innerHTML = `<div class="note ok">${I("check")}<span>The bank confirmed the name <b>${esc(name.toUpperCase())}</b>. Payee saved.</span></div>`;
+      btn.textContent = "Saved";
+      setTimeout(() => { closeModal(); if (W && location.hash === "#pay"){ W.cat = cat; W.vid = v.id; } route(); toast(`${name} added`); }, 900);
+    }, 1100);
+  });
+  setTimeout(() => $("#v-name") && $("#v-name").focus(), 60);
+}
+
+/* ================= Activity ================= */
+const F = { q:"", m:"all" };
+V.activity = () => `
+  <div class="page-h"><div><h1>Activity</h1><p>Every payment, with its bank reference and receipt.</p></div>
+    <button class="btn" data-action="csv">${I("copy")}Copy as CSV</button></div>
+  <section class="card">
+    <div class="toolbar" style="margin-bottom:12px"><div class="search">${I("search")}<input class="input" id="aq" placeholder="Search by payee, reference or UTR" value="${esc(F.q)}" aria-label="Search payments"></div>
+      <div class="seg" id="am">${[["all","All"],["card","Card"],["upi","UPI"],["nb","Net banking"]].map(([k,l]) => `<button class="${F.m===k?"on":""}" data-m="${k}">${l}</button>`).join("")}</div></div>
+    <div id="alist"></div>
+  </section>`;
+A.activity = () => {
+  const draw = () => {
+    const q = F.q.toLowerCase();
+    const rows = S.txns.filter(t => (F.m === "all" || t.method === F.m) && (!q || [vendor(t.vid).name, t.ref, t.utr, t.id].join(" ").toLowerCase().includes(q)));
+    let html = "", last = "";
+    rows.forEach(t => { const mk = parse(t.date).toLocaleDateString("en-IN",{month:"long",year:"numeric"}); if (mk !== last){ html += `${last ? "</div>" : ""}<div class="group-t" style="margin-top:${last?"16px":"0"}">${mk}</div><div class="list">`; last = mk; } html += txnItem(t); });
+    $("#alist").innerHTML = rows.length ? html + "</div>" : '<div class="empty">No payments match.</div>';
+  };
+  $("#aq").addEventListener("input", e => { F.q = e.target.value; draw(); });
+  $("#am").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; F.m = b.dataset.m; [...$("#am").children].forEach(x => x.classList.toggle("on", x === b)); draw(); });
+  draw();
+};
+function txnModal(id){
+  const t = S.txns.find(x => x.id === id); if (!t) return;
+  const v = vendor(t.vid);
+  const text = [`XORPAY receipt ${t.id}`,`Date: ${fDY(t.date)}`,`Payee: ${v.name} (${destOf(v)})`,`For: ${CATS[t.cat].label} · ${t.ref}`,`Payee received: ${inr(t.payee)}`,`Card fee: ${inr(t.fee)} · GST on fee: ${inr(t.gst)}`,`Total charged: ${inr(t.total)} via ${mLabel(t.method)}`,`Status: ${t.status}${t.utr ? " · UTR " + t.utr : ""}`].join("\n");
+  openModal(`
+    <div class="modal-h"><div style="display:flex;gap:12px;align-items:center;min-width:0">${avatar(v)}<div style="min-width:0"><h2>${esc(v.name)}</h2><p class="muted small">${fDY(t.date)}${t.auto ? " · paid by autopay" : ""}${t.batch ? " · part of one-transaction batch " + t.batch : ""}</p></div></div><button class="x" data-action="close" aria-label="Close">${I("x")}</button></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap"><span class="money" style="font-size:34px">${inr(t.payee)}</span>${statusBadge(t.status)}</div>
+    ${t.reason ? `<div class="note warn" style="margin-bottom:16px">${I("info")}<span>${esc(t.reason)}</span></div>` : ""}
+    <div class="receipt">
+      <div class="line"><span>For</span><span>${CATS[t.cat].label} · ${esc(t.ref)}</span></div>
+      <div class="line"><span>Paid to</span><span>${esc(destOf(v))}</span></div>
+      <div class="line"><span>Paid with</span><span>${mLabel(t.method)}</span></div>
+      <div class="line"><span>Card fee + GST</span><span>${t.fee ? inr(t.fee + t.gst) : "Free"}</span></div>
+      <div class="line total"><span>Total charged</span><span>${inr(t.total)}</span></div>
+      ${t.utr ? `<div class="line"><span>${GOVT.includes(t.cat) ? "Challan (CIN)" : t.cat === "utility" ? "BBPS reference" : "Bank reference (UTR)"}</span><span>${t.utr}</span></div>` : ""}
+      ${t.coins ? `<div class="line"><span>XOR coins earned</span><span>+${t.coins}</span></div>` : ""}
+      <div class="line"><span>Transaction ID</span><span>${t.id}</span></div>
+    </div>
+    <button class="btn" style="width:100%;margin-top:20px" data-action="copy" data-text="${esc(text)}">${I("copy")}Copy receipt</button>`);
+}
+
+/* ================= Reports ================= */
+let RM = 6;
+function niceMax(v){ if (v <= 0) return 1; const e = Math.pow(10, Math.floor(Math.log10(v))), f = v/e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e; }
+V.reports = () => {
+  const from = ymd(new Date(T0.getFullYear(), T0.getMonth() - (RM-1), 1));
+  const rows = S.txns.filter(t => live(t) && t.date >= from);
+  const total = rows.reduce((s,t)=>s+t.payee,0), card = rows.filter(t=>t.method==="card");
+  const cardAmt = card.reduce((s,t)=>s+t.payee,0), fees = card.reduce((s,t)=>s+t.fee,0), gst = card.reduce((s,t)=>s+t.gst,0);
+  const months = []; for (let m = RM-1; m >= 0; m--){ const d = new Date(T0.getFullYear(), T0.getMonth()-m, 1), k = ymd(d).slice(0,7), r = rows.filter(t => t.date.startsWith(k)); months.push({ label:d.toLocaleDateString("en-IN",{month:"short"}), full:d.toLocaleDateString("en-IN",{month:"long",year:"numeric"}), n:r.length, amt:r.reduce((s,t)=>s+t.payee,0), card:r.filter(t=>t.method==="card").reduce((s,t)=>s+t.payee,0), fee:r.reduce((s,t)=>s+t.fee+t.gst,0) }); }
+  const max = niceMax(Math.max(...months.map(m => m.amt)));
+  const byCat = Object.keys(CATS).map(k => [k, rows.filter(t=>t.cat===k).reduce((s,t)=>s+t.payee,0)]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]);
+  return `
+  <div class="page-h"><div><h1>Reports & compliance</h1><p>Spending, TDS, GST and statutory payments in one place, ready for your accountant.</p></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><div class="seg">${[3,6].map(m => `<button class="${m===RM?"on":""}" data-action="rm" data-m="${m}">${m} months</button>`).join("")}</div><button class="btn" data-action="csv">${I("copy")}Copy CSV</button></div></div>
+  <div class="stats">
+    <section class="card stat"><div class="label">Total paid</div><span class="money">${short(total)}</span><p>${rows.length} payments</p></section>
+    <section class="card stat"><div class="label">Paid by card</div><span class="money">${short(cardAmt)}</span><p>${Math.round(cardAmt/(total||1)*100)}% of spend on 45-day credit</p></section>
+    <section class="card stat"><div class="label">Card fees</div><span class="money">${inr0(fees)}</span><p>Charged only on card payments</p></section>
+    <section class="card stat"><div class="label">GST you can claim</div><span class="money">${inr0(gst)}</span><p>GST on fees, as input tax credit</p></section>
+  </div>
+  <section class="card"><div class="card-h" style="flex-wrap:wrap"><h2>Money paid out each month</h2>
+      <div class="legend"><span><span class="sw" style="background:var(--brand)"></span>Credit card</span><span><span class="sw" style="background:#93C5FD"></span>UPI & net banking</span></div></div>
+    <div class="chart" role="img" aria-label="Monthly payouts by payment method">
+      <div class="yaxis">${[0,.25,.5,.75,1].map(t => `<span>${short(max*t)}</span>`).join("")}</div>
+      <div class="plot">${[0,.25,.5,.75,1].map(t => `<div class="gl" style="bottom:calc(26px + ${t} * (100% - 26px))"></div>`).join("")}
+        ${months.map(m => `<div class="col" title="${m.full}: ${inr0(m.amt)}"><span class="tl">${short(m.amt)}</span>
+          <div class="stack" style="height:calc(${(m.amt/max).toFixed(4)} * (100% - 22px))"><div style="flex:${m.card};background:var(--brand)"></div><div style="flex:${m.amt-m.card};background:#93C5FD"></div></div>
+          <span class="xl">${m.label}</span></div>`).join("")}</div></div>
+  </section>
+  <section class="card"><div class="card-h" style="flex-wrap:wrap"><div><h2>Compliance register</h2><p class="muted small" style="margin-top:2px">Every government payment with its challan number, ready for your CA.</p></div></div>
+    <div class="tbl"><table style="min-width:560px"><thead><tr><th>Date</th><th>Type</th><th>Details</th><th>Challan / ref</th><th class="r">Amount</th></tr></thead>
+    <tbody>${rows.filter(t => GOVT.includes(t.cat)).slice(0,10).map(t => `<tr><td>${fD(t.date)}</td><td><span class="badge b-mute">${CATS[t.cat].short}</span></td><td class="ink2 small">${esc(t.ref)}</td><td class="small" style="font-family:ui-monospace,monospace">${esc(t.utr || "—")}</td><td class="r" style="font-weight:600">${inr0(t.payee)}</td></tr>`).join("")}</tbody></table></div>
+  </section>
+  <div class="two">
+    <section class="card"><div class="card-h"><h2>By category</h2></div>
+      ${byCat.map(([k,v]) => `<div class="hbar"><span class="ink2 small">${CATS[k].label}</span><div class="t"><i style="width:${(v/byCat[0][1]*100).toFixed(1)}%"></i></div><span class="v small">${short(v)}</span></div>`).join("")}</section>
+    <section class="card"><div class="card-h"><h2>Monthly statement</h2></div>
+      <div class="tbl"><table style="min-width:400px"><thead><tr><th>Month</th><th class="r">Payments</th><th class="r">Paid out</th><th class="r">Fees + GST</th></tr></thead>
+      <tbody>${months.slice().reverse().map(m => `<tr><td>${m.full}</td><td class="r">${m.n}</td><td class="r" style="font-weight:600">${inr0(m.amt)}</td><td class="r">${inr0(m.fee)}</td></tr>`).join("")}</tbody></table></div></section>
+  </div>`;
+};
+function csv(){
+  const rows = [["id","date","payee","category","reference","method","payee_amount","card_fee","gst_on_fee","total_charged","status","utr"]]
+    .concat(S.txns.map(t => [t.id,t.date,vendor(t.vid).name,CATS[t.cat].label,t.ref,mLabel(t.method),(t.payee/100).toFixed(2),(t.fee/100).toFixed(2),(t.gst/100).toFixed(2),(t.total/100).toFixed(2),t.status,t.utr]));
+  return rows.map(r => r.map(c => /[",\n]/.test(String(c)) ? `"${String(c).replace(/"/g,'""')}"` : c).join(",")).join("\n");
+}
+
+/* ================= Plans ================= */
+const SL_MIN = Math.log10(1e6), SL_MAX = Math.log10(5e9);
+const s2t = v => { const r = Math.pow(10, SL_MIN + (SL_MAX-SL_MIN)*v/100), e = Math.pow(10, Math.floor(Math.log10(r)) - 1); return Math.round(r/e)*e; };
+const t2s = t => Math.round((Math.log10(Math.max(1e6,t)) - SL_MIN) / (SL_MAX-SL_MIN) * 100);
+V.plans = () => {
+  const rec = planFor(S.turnover), annual = S.billing === "annual";
+  const price = p => p.price == null ? "Custom" : "₹" + nf0.format(annual ? p.price*10 : p.price);
+  return `
+  <div class="page-h"><div><h1>Simple pricing, based on your turnover</h1><p>One subscription for the platform. UPI and net banking payments are free. Credit-card payments carry a 2% + GST fee.</p></div>
+    <div class="seg"><button class="${annual?"":"on"}" data-action="billing" data-b="monthly">Monthly</button><button class="${annual?"on":""}" data-action="billing" data-b="annual">Yearly · 2 months free</button></div></div>
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap"><label class="label" for="to">Your annual turnover</label><span class="muted small" id="to-plan">Recommended: <b style="color:var(--brand-ink)">${rec.name}</b></span></div>
+    <div class="money" id="to-val" style="font-size:34px;margin:6px 0 4px">${short(S.turnover*100)}</div>
+    <input type="range" id="to" min="0" max="100" value="${t2s(S.turnover)}">
+    <div style="display:flex;justify-content:space-between" class="hint"><span>₹10 L</span><span>₹5 Cr</span><span>₹50 Cr</span><span>₹500 Cr+</span></div>
+    <p class="hint" style="margin-top:12px">Plans follow the Government of India's MSME bands (Micro up to ₹5 Cr, Small up to ₹50 Cr, Medium up to ₹250 Cr). We set your plan from your GST returns and review it once a year.</p>
+  </section>
+  <div class="plans" style="margin-top:8px">${PLANS.map(p => `
+    <section class="card plan ${p.id===rec.id?"rec":""}">${p.id===rec.id?'<span class="ribbon">Your band</span>':""}
+      <div><h2>${p.name}</h2><p class="muted small" style="margin-top:2px">${p.band}</p></div>
+      <div class="money">${price(p)}${p.price!=null?`<small> / ${annual?"year":"month"}</small>`:""}</div>
+      <ul>${p.feats.map(f => `<li>${I("check")}<span>${f}</span></li>`).join("")}</ul>
+      <button class="btn ${p.id===S.plan?"":(p.id===rec.id?"pri":"")}" data-action="choose-plan" data-id="${p.id}" ${p.id===S.plan?"disabled":""}>${p.id===S.plan?"Current plan":p.price==null?"Talk to us":"Choose " + p.name}</button>
+    </section>`).join("")}</div>`;
+};
+A.plans = () => {
+  $("#to").addEventListener("input", e => { S.turnover = s2t(+e.target.value); $("#to-val").textContent = short(S.turnover*100); $("#to-plan").innerHTML = `Recommended: <b style="color:var(--brand-ink)">${planFor(S.turnover).name}</b>`; });
+  $("#to").addEventListener("change", () => { save(); route(); });
+};
+
+/* ================= About ================= */
+V.about = () => `
+  <section class="about-hero">
+    <div class="label">BARG Info Solutions Pvt. Ltd.</div>
+    <h1>Every business payment and compliance, in one transaction.</h1>
+    <p>XORPAY collects an MSME's BBPS bills, vendor invoices, rent, GST, TDS, PF, ESI and professional tax in one list. The owner approves a single debit by net banking, UPI or credit card, and XORPAY splits it to every biller, vendor and government portal, deducting TDS automatically and keeping every challan for the accountant.</p>
+    <div class="facts"><div><span>For</span><b>MSMEs, ₹10 L to ₹250 Cr</b></div><div><span>Revenue</span><b>Subscription by turnover</b></div><div><span>Seed ask</span><b>₹5,00,000 · 6 months</b></div></div>
+    <div style="margin-top:28px;display:flex;gap:10px;flex-wrap:wrap"><a class="btn pri lg" href="#dues">Try paying all dues</a><a class="btn lg ghost-w" href="#home">See the dashboard</a></div>
+  </section>
+  <div class="three">
+    <section class="card"><span class="badge b-err">The problem</span><h2 style="margin-top:12px">Payments are scattered</h2><ul class="bul"><li>Bills on BBPS apps, vendors on the bank portal, GST on the GST portal, TDS on OLTAS, PF on EPFO: five logins, a dozen transactions every month.</li><li>TDS is often missed or wrongly calculated, which brings interest and penalties.</li><li>Missed due dates mean late fees, and most vendors can't take cards.</li></ul></section>
+    <section class="card"><span class="badge b-brand">Our solution</span><h2 style="margin-top:12px">One transaction for everything</h2><ul class="bul"><li>All dues in one list: BBPS bills, invoices, rent, GST, PF, ESI, professional tax.</li><li>TDS (194C, 194J, 194I) deducted automatically and paid to the government in the same transaction.</li><li>One debit by net banking, UPI or card. Autopay for recurring dues.</li></ul></section>
+    <section class="card"><span class="badge b-ok">Business model</span><h2 style="margin-top:12px">Subscription by turnover</h2><ul class="bul">${PLANS.map(p => `<li>${p.name} · ${p.band} · ${p.price ? "₹" + nf0.format(p.price) + "/mo" : "custom"}</li>`).join("")}<li>Plus 2% + GST on credit-card payments only.</li></ul></section>
+  </div>
+  <section class="card"><div class="card-h" style="flex-wrap:wrap"><h2>How the money moves</h2><span class="badge b-mute">XORPAY never holds funds</span></div>
+    <div class="flow">
+      <div class="node"><b>Business</b><span>Approves one debit for all selected dues</span></div>
+      <div class="arrow">Collect${I("arrowR")}</div>
+      <div class="node mid"><b>Cashfree (RBI-authorised)</b><span>Collects into a regulated escrow account, then splits it</span></div>
+      <div class="arrow">Split ${I("arrowR")}</div>
+      <div class="node"><b>Every payee</b><span>Billers via BBPS, vendors via IMPS/UPI, GST, TDS, EPFO and ESIC via challans</span></div>
+    </div></section>
+  <div class="two">
+    <section class="card"><div class="card-h"><h2>What's already built</h2><span class="badge b-ok">Working code</span></div><ul class="bul" style="margin:0">
+      <li>Payments backend on the Cashfree sandbox: orders, payouts, ledger, fee engine, limits.</li>
+      <li>KYC with PAN, Aadhaar, selfie and GSTIN checks.</li>
+      <li>Payee verification, notifications and support tickets.</li>
+      <li>Admin console for KYC review, refunds, reconciliation and reports.</li>
+      <li>This web prototype: one-transaction dues, auto TDS, BBPS bills, autopay and compliance reports.</li></ul></section>
+    <section class="card"><div class="card-h"><h2>Use of seed funds</h2><b class="money" style="font-size:18px">₹5,00,000</b></div>
+      ${[["Product development",200000],["Bank & gateway setup",100000],["Cloud & security",75000],["Pilot with MSMEs",75000],["Admin & compliance",50000]].map(([l,v]) => `<div class="hbar"><span class="ink2 small">${l}</span><div class="t"><i style="width:${v/2000}%"></i></div><span class="v small">₹${nf0.format(v)}</span></div>`).join("")}</section>
+  </div>
+  <section class="card"><h2 style="margin-bottom:14px">Six-month plan</h2><div class="miles">
+    ${[["Month 1–2","Architecture, database and UI prototype",1],["Month 3","Working MVP release"],["Month 4","Bank and payment gateway live"],["Month 5","Pilot with real MSMEs"],["Month 6","Validation report and production launch"]].map(([m,t,now]) => `<div class="mile ${now?"now":""}"><b>${m}${now?" · now":""}</b><p>${t}</p></div>`).join("")}
+  </div></section>`;
+
+/* ================= modal / toast ================= */
+let lastFocus = null;
+function openModal(html){ lastFocus = document.activeElement; $("#modal-root").innerHTML = `<div class="scrim" data-scrim><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`; }
+function closeModal(){ $("#modal-root").innerHTML = ""; lastFocus && lastFocus.focus && lastFocus.focus(); }
+let tt; function toast(m){ const t = $("#toast"); t.textContent = m; t.classList.add("on"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("on"), 2600); }
+async function copy(text){ try { await navigator.clipboard.writeText(text); toast("Copied"); } catch(e){ openModal(`<div class="modal-h"><h2>Copy this text</h2><button class="x" data-action="close" aria-label="Close">${I("x")}</button></div><textarea class="input" style="height:240px;font-size:12px;font-family:ui-monospace,monospace" id="copy-ta" aria-label="Text to copy">${esc(text)}</textarea>`); const ta = $("#copy-ta"); ta.focus(); ta.select(); } }
+function moreSheet(){
+  openModal(`<div class="modal-h"><h2>More</h2><button class="x" data-action="close" aria-label="Close">${I("x")}</button></div>
+    <div class="choices">${[["pay","Single payment","send"],["vendors","Vendors","users"],["reports","Reports & compliance","chart"],["plans","Plans & pricing","layers"],["about","About XORPAY","info"]].map(([h,l,i]) => `<a class="choice" href="#${h}" data-action="close" style="text-decoration:none;color:inherit"><span class="ico">${I(i)}</span><div class="grow"><b>${l}</b></div>${I("arrowR",'style="width:18px;height:18px;color:var(--muted)"')}</a>`).join("")}</div>`);
+}
+
+/* ================= events ================= */
+const go = h => { if (location.hash === "#" + h) route(); else location.hash = "#" + h; };
+document.addEventListener("click", e => {
+  if (e.target.matches("[data-scrim]")) { closeModal(); return; }
+  const a = e.target.closest("[data-action]"); if (!a) return;
+  const id = a.dataset.id;
+  switch (a.dataset.action){
+    case "close": closeModal(); break;
+    case "go-dues": B = null; go("dues"); break;
+    case "sel-all": { const od = openDues(); B.sel = B.sel.length === od.length ? [] : od.map(d => d.id); route(); break; }
+    case "dues-review": B.step = "review"; route(); break;
+    case "dues-back": B.step = "select"; route(); break;
+    case "dues-method": B.method = a.dataset.m; route(); break;
+    case "dues-pay": runBatch(); break;
+    case "dues-finish": B = null; break;
+    case "more": moreSheet(); break;
+    case "reset": try { localStorage.removeItem(KEY); } catch(_){} S = seed(); S.v = T0.toDateString(); W = null; B = null; save(); route(); toast("Demo data reset"); break;
+    case "hide-tip": S.tipHidden = true; save(); route(); break;
+    case "start-pay": W = newW({ cat:a.dataset.cat }); go("pay"); break;
+    case "new-schedule": W = newW({ mode:"schedule" }); go("pay"); break;
+    case "pay-vendor": { const v = vendor(id); W = newW({ cat:v.cat, vid:v.id, step:2 }); go("pay"); break; }
+    case "cancel-pay": W = null; location.hash = "#home"; break;
+    case "cat": W.cat = a.dataset.cat; W.vid = ""; route(); break;
+    case "pick-payee": W.vid = id; route(); break;
+    case "next": W.step++; route(); break;
+    case "goto": W.step = +a.dataset.step; route(); break;
+    case "amt": W.amount = String(+a.dataset.amt); $("#f-amt").value = W.amount; step2Update(); break;
+    case "method": W.method = a.dataset.m; document.querySelectorAll('[data-action="method"]').forEach(x => x.classList.toggle("on", x === a)); step2Update(); break;
+    case "mode": W.mode = a.dataset.v; route(); break;
+    case "confirm-pay": { const p = amtPaise(), q = quote(p, W.method); S.seq++;
+      const t = { id:"XP" + (5200000 + S.seq*41), date: ymd(T0), vid:W.vid, cat:W.cat, method:W.method, ...q, status:"Processing", ref: W.ref || CATS[W.cat].label, utr:"", coins:0 };
+      S.txns.unshift(t); save(); W.done = t.id; route(); startProcessing(); break; }
+    case "confirm-schedule": { S.seq++; S.schedules.push({ id:"s" + S.seq, vid:W.vid, cat:W.cat, amount:amtPaise(), method:W.method, freq:W.freq, next:W.start, ref: W.ref || CATS[W.cat].label, active:true });
+      save(); toast(`Scheduled. First payment on ${fDY(W.start)}`); W = null; location.hash = "#scheduled"; break; }
+    case "pay-again": W = newW(); route(); break;
+    case "finish": W = null; break;
+    case "add-vendor": addVendorModal(); break;
+    case "verify": { const v = vendor(id); a.disabled = true; a.textContent = "Checking with bank…"; setTimeout(() => { v.verified = true; save(); route(); toast(`${v.name} verified`); }, 1000); break; }
+    case "toggle": { const s = S.schedules.find(x => x.id === id); s.active = !s.active; save(); route(); toast(s.active ? "Schedule resumed" : "Schedule paused"); break; }
+    case "run": { const s = S.schedules.find(x => x.id === id); if (runSchedule(s)){ save(); route(); toast(`Paid ${inr0(s.amount)} to ${vendor(s.vid).name}`); } break; }
+    case "txn": txnModal(id); break;
+    case "copy": copy(a.dataset.text); break;
+    case "csv": copy(csv()); break;
+    case "rm": RM = +a.dataset.m; route(); break;
+    case "billing": S.billing = a.dataset.b; save(); route(); break;
+    case "choose-plan": { const p = PLANS.find(x => x.id === id); if (p.price == null){ toast("Our team will reach out about Enterprise"); break; } S.plan = id; save(); route(); toast(`You're on the ${p.name} plan`); break; }
+  }
+});
+document.addEventListener("change", e => {
+  const id = e.target.dataset && e.target.dataset.due; if (!id) return;
+  B.sel = e.target.checked ? [...new Set([...B.sel, id])] : B.sel.filter(x => x !== id);
+  const y = window.scrollY; route(); window.scrollTo({ top:y });
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeModal();
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches('[role="button"][data-action]')) { e.preventDefault(); e.target.click(); }
+  if (e.key === "Enter" && e.target.id === "f-amt" && $("#next2") && !$("#next2").disabled) $("#next2").click();
+});
+window.addEventListener("hashchange", () => { if (location.hash !== "#pay" && W && W.done) W = null; if (location.hash !== "#dues" && B && B.step === "done") B = null; route(); });
+route();
+})();
+</script>
