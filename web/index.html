@@ -404,7 +404,7 @@ input[type=range]{width:100%;accent-color:var(--brand);height:28px}
 (() => {
 "use strict";
 /* ================= utilities ================= */
-const KEY = "xorpay-web-v4";
+const KEY = "xorpay-web-v5";
 const T0 = new Date(); T0.setHours(0,0,0,0);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -601,6 +601,7 @@ function renderNav(cur){
   $("#tabbar").innerHTML = TABS.map(t => t[0] === "more"
     ? `<button data-action="more" class="${moreOn?"on":""}">${I(t[2])}${t[1]}</button>`
     : `<a href="#${t[0]}" class="${t[0]===cur?"on":""} ${t[0]==="dues"?"paybtn":""}">${I(t[2])}${t[1]}</a>`).join("");
+  if (!PLANS.some(x => x.id === S.plan)) S.plan = planFor(S.turnover).id;
   const p = PLANS.find(p => p.id === S.plan);
   $("#side-plan").textContent = p.name + " plan" + (p.price ? " · ₹" + nf0.format(p.price) + "/mo" : "");
 }
