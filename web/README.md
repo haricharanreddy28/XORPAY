@@ -7,6 +7,7 @@ browser with sample data. No backend is needed and no real money moves.
 (`index.html` is the same page without the HTML wrapper, used for hosted previews.)
 
 ## Screens
+- **Pay all dues** – the core feature: BBPS bills, vendor invoices, rent, GST, PF, ESI and professional tax in one list; TDS (194C/194J/194I) deducted automatically and remitted in the same batch; one debit split into every payout
 - **Command deck** – monthly payout, card float, upcoming payments, 6-month cash-out chart
 - **Pay** – any category (vendor, rent, GST, TDS, salaries, education, utilities), live fee quote
 - **Schedules** – recurring/one-time payments, 30-day timeline, pause/resume, run now

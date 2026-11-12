@@ -219,6 +219,32 @@ p{margin:0}
 .st b{display:block;font-weight:600;font-size:14px}
 .st span{font-size:12.5px;color:var(--muted)}
 
+/* ---------- dues ---------- */
+.dues{display:flex;flex-direction:column;gap:8px}
+.due{position:relative;display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);cursor:pointer;transition:border-color .15s,background .15s}
+.due:hover{border-color:#CDBDF7}
+.due.on{border-color:var(--brand);background:#FBF9FF}
+.due input{position:absolute;opacity:0;width:1px;height:1px}
+.due .cb{width:22px;height:22px;border-radius:7px;border:2px solid var(--line-2);flex:none;display:grid;place-items:center;background:#fff}
+.due .cb svg{width:14px;height:14px;color:#fff;opacity:0}
+.due.on .cb{background:var(--brand);border-color:var(--brand)}
+.due.on .cb svg{opacity:1}
+.due input:focus-visible + .cb{outline:3px solid rgba(108,43,217,.35);outline-offset:2px}
+.due .grow{flex:1;min-width:0}
+.due .grow b{display:block;font-weight:600}
+.due .grow span{display:block;font-size:12.5px;color:var(--muted)}
+.due .grow .tds{display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:var(--brand-ink);background:var(--brand-soft);padding:3px 9px;border-radius:8px}
+.due .grow .tds.no{color:var(--ink-2);background:var(--subtle)}
+.due .amt{text-align:right;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.due .amt span{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:2px}
+.due .amt .soon-t{color:var(--warn)}
+.bp .st-ic{width:24px;height:24px;border-radius:50%;border:2px solid var(--line-2);display:grid;place-items:center;flex:none}
+.bp .st-ic svg{width:13px;height:13px;color:#fff;opacity:0}
+.bp.ok .st-ic{background:var(--ok);border-color:var(--ok)}
+.bp.ok .st-ic svg{opacity:1}
+.bp.act .st-ic{border-color:var(--brand);border-top-color:transparent;animation:spin .9s linear infinite}
+.bp:not(.ok):not(.act){opacity:.55}
+
 /* ---------- tables / filters ---------- */
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .search{position:relative;flex:1 1 260px}
@@ -338,6 +364,8 @@ input[type=range]{width:100%;accent-color:var(--brand);height:28px}
   .card{padding:18px}
   .hbar{grid-template-columns:96px minmax(0,1fr) 64px;gap:10px}
   .hide-sm{display:none!important}
+  .due{gap:10px;padding:12px}
+  .due .av{display:none}
   .tip{flex-wrap:wrap;align-items:flex-start;position:relative;padding-right:56px}
   .tip .ico{display:none}
   .tip .grow{flex-basis:100%}
@@ -375,7 +403,7 @@ input[type=range]{width:100%;accent-color:var(--brand);height:28px}
 (() => {
 "use strict";
 /* ================= utilities ================= */
-const KEY = "xorpay-web-v3";
+const KEY = "xorpay-web-v4";
 const T0 = new Date(); T0.setHours(0,0,0,0);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -402,6 +430,7 @@ function quote(payee, method){
   const fee = Math.round(payee * CARD_FEE_PCT / 100), gst = Math.round(fee * GST_PCT / 100);
   return { payee, fee, gst, total: payee + fee + gst };
 }
+const tdsFor = d => d.tdsRate ? Math.round(d.amount * d.tdsRate / 100) : 0;
 const coinsFor = (p, m) => m === "card" ? Math.floor(p / 10000) : 0;
 
 const P = {
@@ -432,6 +461,7 @@ const P = {
   cap:'<path d="m2 9 10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
   plug:'<path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/>',
   copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+  bolt:'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
   sparkle:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
 };
 const I = (k, a="") => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${a}>${P[k]}</svg>`;
@@ -443,8 +473,12 @@ const CATS = {
   tax:      { label:"TDS / Income tax", short:"Taxes",     icon:"landmark", ref:"Challan / BSR code", ph:"ITNS 281" },
   salary:   { label:"Salaries",         short:"Salaries",  icon:"wallet",   ref:"Payroll month",  ph:"Nov 2026" },
   education:{ label:"Education fees",   short:"Education", icon:"cap",      ref:"Student ID",     ph:"VPS-1043" },
-  utility:  { label:"Utility bills",    short:"Utilities", icon:"plug",     ref:"Consumer number", ph:"110233445501" },
+  utility:  { label:"Bills (BBPS)",     short:"Bills",     icon:"plug",     ref:"Consumer number", ph:"110233445501" },
+  pf:       { label:"PF (EPFO)",        short:"PF",        icon:"shield",   ref:"ECR / TRRN",     ph:"Oct 2026 ECR" },
+  esi:      { label:"ESI",              short:"ESI",       icon:"shield",   ref:"Challan month",  ph:"Oct 2026" },
+  pt:       { label:"Professional tax", short:"Prof. tax", icon:"landmark", ref:"Return period",  ph:"Oct 2026" },
 };
+const GOVT = ["gst","tax","pf","esi","pt"];
 const METHODS = {
   upi:  { label:"UPI",         sub:"svfab@icici",            icon:"upi",  perk:"Instant, from your current account", fee:"Free" },
   nb:   { label:"Net banking", sub:"ICICI Current •• 0921",  icon:"bank", perk:"Direct debit from your bank", fee:"Free" },
@@ -476,6 +510,13 @@ function seed(){
     { id:"v7", name:"TSSPDCL Electricity", cat:"utility", type:"biller", consumer:"110233445501", verified:true, c:"#A16207", cb:"#FEF9E1" },
     { id:"v8", name:"Income Tax Dept · TDS", cat:"tax", type:"govt", verified:true, c:"#0F766E", cb:"#E4F5F3" },
     { id:"v9", name:"Shop-floor team (12)", cat:"salary", type:"bank", acct:"BULK", ifsc:"Multiple", verified:true, c:"#7C3AED", cb:"#F3EDFE" },
+    { id:"v10", name:"HMWSSB Water", cat:"utility", type:"biller", consumer:"CAN 0412-7781", verified:true, c:"#0369A1", cb:"#E0F2FE" },
+    { id:"v11", name:"ACT Fibernet", cat:"utility", type:"biller", consumer:"ACT-1100982", verified:true, c:"#C2410C", cb:"#FFEDD5" },
+    { id:"v12", name:"Airtel Postpaid (5 lines)", cat:"utility", type:"biller", consumer:"98480 •• 211", verified:true, c:"#B91C1C", cb:"#FDECEC" },
+    { id:"v13", name:"Rao & Associates (CA)", cat:"vendor", type:"bank", acct:"917020034411", ifsc:"UTIB0000553", gstin:"36AAJFR1187D1ZQ", verified:true, c:"#4338CA", cb:"#EEF2FF" },
+    { id:"v14", name:"EPFO · Provident Fund", cat:"pf", type:"govt", verified:true, c:"#15803D", cb:"#E7F7EC" },
+    { id:"v15", name:"ESIC", cat:"esi", type:"govt", verified:true, c:"#0E7490", cb:"#E0F7FA" },
+    { id:"v16", name:"Telangana Commercial Taxes", cat:"pt", type:"govt", verified:true, c:"#9333EA", cb:"#F5EBFF" },
   ];
   const txns = []; let n = 0;
   const add = (date, vid, cat, rupees, method, status="Settled", ref="", extra={}) => {
@@ -512,7 +553,23 @@ function seed(){
     { id:"s7", vid:"v5", cat:"education", amount:28000_00,  method:"card", freq:"quarterly", next:ymd(new Date(T0.getFullYear(), T0.getMonth()+2, 10)), ref:"Term fee", active:true },
     { id:"s8", vid:"v7", cat:"utility",   amount:13500_00,  method:"upi",  freq:"monthly",   next:nextDay(15), ref:"Electricity bill", active:false },
   ];
-  return { vendors, txns, schedules, turnover:3.8e7, plan:"micro", billing:"monthly", tipHidden:false, seq:900 };
+  // Open dues, auto-collected from BBPS, uploaded invoices and the GST / EPFO / ESIC portals.
+  const due = n => ymd(addDays(T0, n));
+  const dues = [
+    { id:"d1",  vid:"v7",  cat:"utility", amount:13640_00,  due:due(3),  ref:"Bill 7781-1125 · fetched via BBPS" },
+    { id:"d2",  vid:"v10", cat:"utility", amount:2180_00,   due:due(5),  ref:"Bill Nov 2026 · fetched via BBPS" },
+    { id:"d3",  vid:"v11", cat:"utility", amount:2359_00,   due:due(2),  ref:"Bill Nov 2026 · fetched via BBPS" },
+    { id:"d4",  vid:"v12", cat:"utility", amount:3245_00,   due:due(6),  ref:"Bill Nov 2026 · fetched via BBPS" },
+    { id:"d5",  vid:"v1",  cat:"vendor",  amount:184500_00, due:due(6),  ref:"INV-2312 · steel coils", tdsNote:"No TDS on purchase of goods" },
+    { id:"d6",  vid:"v4",  cat:"vendor",  amount:22000_00,  due:due(4),  ref:"INV-SL-889 · transport", tdsSec:"194C", tdsRate:2 },
+    { id:"d7",  vid:"v13", cat:"vendor",  amount:35000_00,  due:due(8),  ref:"INV-RA-104 · audit fees", tdsSec:"194J", tdsRate:10 },
+    { id:"d8",  vid:"v2",  cat:"rent",    amount:45000_00,  due:due(9),  ref:"Office rent · Dec 2026", tdsSec:"194I", tdsRate:10 },
+    { id:"d9",  vid:"v3",  cat:"gst",     amount:42300_00,  due:ymd(new Date(T0.getFullYear(), T0.getMonth() + (T0.getDate() < 20 ? 0 : 1), 20)), ref:"GSTR-3B · net liability after ITC" },
+    { id:"d10", vid:"v14", cat:"pf",      amount:26400_00,  due:ymd(new Date(T0.getFullYear(), T0.getMonth() + (T0.getDate() < 15 ? 0 : 1), 15)), ref:"ECR · 12 employees" },
+    { id:"d11", vid:"v15", cat:"esi",     amount:4650_00,   due:ymd(new Date(T0.getFullYear(), T0.getMonth() + (T0.getDate() < 15 ? 0 : 1), 15)), ref:"Monthly contribution · 12 employees" },
+    { id:"d12", vid:"v16", cat:"pt",      amount:2400_00,   due:due(18), ref:"12 employees × ₹200" },
+  ];
+  return { vendors, txns, schedules, dues, turnover:3.8e7, plan:"micro", billing:"monthly", tipHidden:false, seq:900 };
 }
 let S;
 function load(){ try { const raw = localStorage.getItem(KEY); if (raw){ const s = JSON.parse(raw); if (s && s.v === T0.toDateString()) return s; } } catch(e){} const s = seed(); s.v = T0.toDateString(); return s; }
@@ -530,17 +587,17 @@ const live = t => t.status === "Settled" || t.status === "Processing";
 
 /* ================= shell ================= */
 const NAV = [
-  ["home","Home","home"],["pay","Pay","send"],["scheduled","Scheduled","cal"],["vendors","Vendors","users"],["activity","Activity","list"],
-  ["grp","Business"],["reports","Reports","chart"],["plans","Plans","layers"],["about","About XORPAY","info"],
+  ["home","Home","home"],["dues","Pay all dues","bolt"],["pay","Single payment","send"],["scheduled","Autopay","cal"],["vendors","Vendors","users"],["activity","Activity","list"],
+  ["grp","Business"],["reports","Reports & compliance","chart"],["plans","Plans","layers"],["about","About XORPAY","info"],
 ];
-const TABS = [["home","Home","home"],["scheduled","Scheduled","cal"],["pay","Pay","send"],["activity","Activity","list"],["more","More","more"]];
+const TABS = [["home","Home","home"],["scheduled","Autopay","cal"],["dues","Pay dues","bolt"],["activity","Activity","list"],["more","More","more"]];
 function renderNav(cur){
   $("#nav").innerHTML = NAV.map(n => n[0] === "grp" ? `<div class="grp">${n[1]}</div>` :
     `<a href="#${n[0]}" class="${n[0]===cur?"on":""}" ${n[0]===cur?'aria-current="page"':""}>${I(n[2])}${n[1]}</a>`).join("");
-  const moreOn = ["vendors","reports","plans","about"].includes(cur);
+  const moreOn = ["pay","vendors","reports","plans","about"].includes(cur);
   $("#tabbar").innerHTML = TABS.map(t => t[0] === "more"
     ? `<button data-action="more" class="${moreOn?"on":""}">${I(t[2])}${t[1]}</button>`
-    : `<a href="#${t[0]}" class="${t[0]===cur?"on":""} ${t[0]==="pay"?"paybtn":""}">${I(t[2])}${t[1]}</a>`).join("");
+    : `<a href="#${t[0]}" class="${t[0]===cur?"on":""} ${t[0]==="dues"?"paybtn":""}">${I(t[2])}${t[1]}</a>`).join("");
   const p = PLANS.find(p => p.id === S.plan);
   $("#side-plan").textContent = p.name + " plan" + (p.price ? " · ₹" + nf0.format(p.price) + "/mo" : "");
 }
@@ -556,52 +613,57 @@ function route(){
 const V = {}, A = {};
 
 /* ================= Home ================= */
+const openDues = () => S.dues.filter(d => !d.paid);
+const groupOf = d => d.cat === "utility" ? "bbps" : GOVT.includes(d.cat) ? "govt" : "vendor";
 V.home = () => {
-  const mt = S.txns.filter(t => t.date.startsWith(thisMonth) && live(t));
-  const paid = mt.reduce((s,t) => s + t.payee, 0) || 1;
-  const card = mt.filter(t => t.method === "card").reduce((s,t) => s + t.payee, 0);
-  const cardCharged = mt.filter(t => t.method === "card").reduce((s,t) => s + t.total, 0);
-  const bank = paid - card;
+  const od = openDues();
+  const sum = f => od.filter(f).reduce((s,d) => s + d.amount, 0);
+  const total = sum(() => true) || 1, bb = sum(d => groupOf(d) === "bbps"), vn = sum(d => groupOf(d) === "vendor"), gv = sum(d => groupOf(d) === "govt");
+  const tdsDue = od.reduce((s,d) => s + tdsFor(d), 0);
+  const comp = [["gst","GST (GSTR-3B)"],["tds","TDS"],["pf","PF (EPFO)"],["esi","ESI"],["pt","Professional tax"]].map(([k,l]) => {
+    if (k === "tds") return [l, tdsDue ? `<span class="badge b-warn">${inr0(tdsDue)} to deduct</span>` : '<span class="badge b-ok">Up to date</span>', tdsDue ? "Deducted and paid with your vendor dues" : "Nothing pending"];
+    const d = od.find(x => x.cat === k);
+    return [l, d ? `<span class="badge ${daysTo(d.due) <= 5 ? "b-warn" : "b-sky"}">${when(d.due)}</span>` : '<span class="badge b-ok">Paid</span>', d ? `${inr0(d.amount)} due ${fD(d.due)}` : "Filed and paid this month"];
+  });
   const up = S.schedules.filter(s => s.active).sort((a,b) => a.next.localeCompare(b.next)).slice(0,4);
   const recent = S.txns.slice(0,4);
   const h = new Date().getHours();
   const greet = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
   return `
-  <div class="page-h"><div><h1>${greet}</h1><p>Here's where your business money is going this month.</p></div>
-    <a class="btn pri lg hide-sm" href="#pay">${I("send")}Make a payment</a></div>
+  <div class="page-h"><div><h1>${greet}</h1><p>Your bills, vendors, taxes and compliances, all in one place.</p></div>
+    <a class="btn pri lg hide-sm" href="#dues">${I("bolt")}Pay all dues</a></div>
 
-  ${S.tipHidden ? "" : `<div class="tip"><span class="ico">${I("sparkle")}</span><div class="grow"><b>New here? Make a payment in 3 steps.</b><p class="ink2 small">Pick who you're paying, enter the amount, and choose UPI, net banking or card. The money goes straight to their bank.</p></div>
-    <a class="btn pri sm" href="#pay">Start</a><button class="x" data-action="hide-tip" aria-label="Dismiss tip">${I("x")}</button></div>`}
+  ${S.tipHidden ? "" : `<div class="tip"><span class="ico">${I("sparkle")}</span><div class="grow"><b>Pay everything in one transaction.</b><p class="ink2 small">XORPAY collects your BBPS bills, vendor invoices, GST, TDS, PF, ESI and professional tax. Tick what to pay, approve once, and we split it to every payee.</p></div>
+    <a class="btn pri sm" href="#dues">Try it</a><button class="x" data-action="hide-tip" aria-label="Dismiss tip">${I("x")}</button></div>`}
 
   <div class="home-top">
     <section class="hero">
-      <div><div class="label">Paid out in ${T0.toLocaleDateString("en-IN",{month:"long"})}</div>
-        <div class="money" style="margin-top:12px">${inr0(paid)}</div>
-        <p style="margin-top:10px">${mt.length} payments, each one to a verified bank account or UPI ID.</p></div>
-      <div>
-        <div class="split"><i style="width:${(card/paid*100).toFixed(1)}%;background:#A78BFA"></i><i style="width:${(bank/paid*100).toFixed(1)}%;background:#60A5FA"></i></div>
+      <div><div class="label">Due in the next 30 days</div>
+        <div class="money" style="margin-top:12px">${od.length ? inr0(total) : "₹0"}</div>
+        <p style="margin-top:10px">${od.length ? `${od.length} payments across bills, vendors and government. Pay them all with one debit.` : "You're all caught up. Nothing is due."}</p></div>
+      ${od.length ? `<div>
+        <div class="split"><i style="width:${(bb/total*100).toFixed(1)}%;background:#FBBF24"></i><i style="width:${(vn/total*100).toFixed(1)}%;background:#A78BFA"></i><i style="width:${(gv/total*100).toFixed(1)}%;background:#34D399"></i></div>
         <div class="split-legend" style="margin-top:14px">
-          <div><span class="sw" style="background:#A78BFA"></span>By credit card<b>${inr0(card)}</b></div>
-          <div><span class="sw" style="background:#60A5FA"></span>By UPI & net banking<b>${inr0(bank)}</b></div>
+          <div><span class="sw" style="background:#FBBF24"></span>Bills (BBPS)<b>${inr0(bb)}</b></div>
+          <div><span class="sw" style="background:#A78BFA"></span>Vendors & rent<b>${inr0(vn)}</b></div>
+          <div><span class="sw" style="background:#34D399"></span>Taxes & compliance<b>${inr0(gv)}</b></div>
         </div>
-      </div>
+        <a class="btn lg" href="#dues" style="margin-top:22px;background:#fff;color:var(--deep);border-color:#fff">${I("bolt")}Pay all in one transaction</a>
+      </div>` : ""}
     </section>
-    <section class="card credit">
-      <div class="card-h" style="margin:0"><h2>Business credit card</h2><span class="badge b-mute">HDFC •• 4417</span></div>
-      <div><div class="label">Available to spend</div><div class="money" style="font-size:30px;margin-top:6px">${inr0(CREDIT_LIMIT - cardCharged)}</div></div>
-      <div><div class="bar"><i style="width:${(cardCharged/CREDIT_LIMIT*100).toFixed(1)}%"></i></div>
-        <div style="display:flex;justify-content:space-between;margin-top:8px" class="small muted"><span>Used ${inr0(cardCharged)}</span><span>Limit ${short(CREDIT_LIMIT)}</span></div></div>
-      <div class="perk">${I("card")}<span>Pay vendors by card today and repay the bank in up to <b>45 days</b>. Your cash stays in the business.</span></div>
+    <section class="card">
+      <div class="card-h"><h2>Compliance this month</h2><a class="btn link small" href="#reports">Details</a></div>
+      <div class="list">${comp.map(([l,b,s]) => `<div class="item"><span class="ico" style="width:34px;height:34px;border-radius:10px">${I("shield")}</span><div class="grow"><b>${l}</b><span>${s}</span></div>${b}</div>`).join("")}</div>
     </section>
   </div>
 
   <div class="quick">
-    ${[["vendor","Pay a vendor","Bank account or UPI"],["rent","Pay rent","To your landlord"],["gst","Pay GST","Challan via GSTN"],["schedule","Schedule a payment","Rent, salaries, taxes"]].map(([k,t,s]) =>
-      `<button class="qa" data-action="${k==="schedule"?"new-schedule":"start-pay"}" data-cat="${k}"><span class="ico">${I(k==="schedule"?"cal":CATS[k].icon)}</span><b>${t}</b><span class="s">${s}</span></button>`).join("")}
+    ${[["dues","Pay all dues","One transaction for everything","bolt"],["utility","Pay a bill","Electricity, water, internet via BBPS","plug"],["vendor","Pay a vendor","TDS deducted automatically","box"],["schedule","Set up autopay","Rent, salaries, taxes","cal"]].map(([k,t,s,ic]) =>
+      `<button class="qa" data-action="${k==="dues"?"go-dues":k==="schedule"?"new-schedule":"start-pay"}" data-cat="${k}"><span class="ico">${I(ic)}</span><b>${t}</b><span class="s">${s}</span></button>`).join("")}
   </div>
 
   <div class="two">
-    <section class="card"><div class="card-h"><h2>Coming up</h2><a class="btn link small" href="#scheduled">See all</a></div>
+    <section class="card"><div class="card-h"><h2>Autopay coming up</h2><a class="btn link small" href="#scheduled">See all</a></div>
       <div class="list">${up.map(s => { const v = vendor(s.vid), d = parse(s.next), soon = daysTo(s.next) <= 3; return `
         <div class="item"><div class="date ${soon?"soon":""}"><small>${d.toLocaleDateString("en-IN",{month:"short"})}</small><b>${d.getDate()}</b></div>
           <div class="grow"><b>${esc(v.name)}</b><span>${esc(s.ref)} · ${when(s.next)}</span></div>
@@ -613,8 +675,110 @@ V.home = () => {
 function txnItem(t){
   const v = vendor(t.vid);
   return `<div class="item click" data-action="txn" data-id="${t.id}" tabindex="0" role="button">${avatar(v)}
-    <div class="grow"><b>${esc(v.name)}</b><span>${fD(t.date)} · ${mLabel(t.method)}</span></div>
+    <div class="grow"><b>${esc(v.name)}</b><span>${fD(t.date)} · ${t.batch ? "Batch " + t.batch : mLabel(t.method)}</span></div>
     <div class="amt">${inr0(t.payee)}<span>${statusBadge(t.status)}</span></div></div>`;
+}
+
+/* ================= Pay all dues (one transaction) ================= */
+let B = null;
+const GROUPS = [["bbps","Bills via BBPS","Fetched automatically from your billers"],["vendor","Vendors & rent","TDS is worked out and deducted for you"],["govt","Taxes & compliance","GST, PF, ESI and professional tax"]];
+function batchCalc(){
+  const items = S.dues.filter(d => !d.paid && B.sel.includes(d.id));
+  const lines = items.map(d => ({ d, v: vendor(d.vid), tds: tdsFor(d), net: d.amount - tdsFor(d), group: groupOf(d) }));
+  const tdsLines = lines.filter(l => l.tds);
+  const payouts = lines.map(l => ({ vid:l.d.vid, cat:l.d.cat, amount:l.net, ref:l.d.ref + (l.tds ? ` · TDS ${l.d.tdsSec} ${inr0(l.tds)} deducted` : ""), due:l.d.id }));
+  const tdsTotal = tdsLines.reduce((s,l) => s + l.tds, 0);
+  if (tdsTotal) payouts.push({ vid:"v8", cat:"tax", amount:tdsTotal, ref:"Challan 281 · TDS " + [...new Set(tdsLines.map(l => l.d.tdsSec))].join(", "), tds:true });
+  const qs = payouts.map(p => quote(p.amount, B.method));
+  const fee = qs.reduce((s,q) => s + q.fee, 0), gst = qs.reduce((s,q) => s + q.gst, 0);
+  const gross = lines.reduce((s,l) => s + l.d.amount, 0);
+  const by = g => lines.filter(l => l.group === g).reduce((s,l) => s + l.net, 0);
+  return { lines, tdsLines, payouts, qs, tdsTotal, fee, gst, gross, total: gross + fee + gst, by };
+}
+V.dues = () => {
+  if (!B) B = { step:"select", sel: openDues().map(d => d.id), method:"nb", batch:null };
+  B.sel = B.sel.filter(id => S.dues.some(d => d.id === id && !d.paid));
+  if (B.step === "done" || B.step === "processing") return duesProcessing();
+  if (B.step === "review") return duesReview();
+  const od = openDues();
+  const c = batchCalc();
+  const row = d => { const v = vendor(d.vid), on = B.sel.includes(d.id), t = tdsFor(d); return `
+    <label class="due ${on?"on":""}"><input type="checkbox" data-due="${d.id}" ${on?"checked":""}><span class="cb">${I("check")}</span>${avatar(v)}
+      <div class="grow"><b>${esc(v.name)}</b><span>${esc(d.ref)}</span>
+        ${t ? `<span class="tds">TDS ${d.tdsSec} @ ${d.tdsRate}%: ${inr0(t)} goes to Income Tax · vendor gets ${inr0(d.amount - t)}</span>` : d.tdsNote ? `<span class="tds no">${d.tdsNote}</span>` : ""}</div>
+      <div class="amt">${inr0(d.amount)}<span class="${daysTo(d.due)<=3?"soon-t":""}">Due ${fD(d.due)}</span></div></label>`; };
+  return `
+  <div class="page-h"><div><h1>Pay all dues</h1><p>Every bill, vendor invoice, tax and compliance payment, settled with <b>one transaction</b> from your account.</p></div>
+    <button class="btn" data-action="sel-all">${B.sel.length === od.length ? "Clear all" : "Select all"}</button></div>
+  ${od.length ? GROUPS.map(([g,t,s]) => { const rows = od.filter(d => groupOf(d) === g); if (!rows.length) return ""; return `
+    <section class="card"><div class="card-h"><div><h2>${t}</h2><p class="muted small" style="margin-top:2px">${s}</p></div><span class="badge b-mute">${rows.length}</span></div>
+      <div class="dues">${rows.map(row).join("")}</div></section>`; }).join("")
+    : `<section class="card"><div class="empty"><div class="check" style="margin:0 auto 14px">${I("check")}</div><b style="color:var(--ink)">All dues are paid.</b><br>New bills and invoices will show up here automatically.</div></section>`}
+  ${od.length ? `<div class="wiz-foot"><div class="grow"><span class="muted small">${B.sel.length} selected${c.tdsTotal ? ` · TDS ${inr0(c.tdsTotal)} included` : ""}</span><b>${inr(c.gross)}</b></div>
+    <button class="btn pri lg" data-action="dues-review" ${B.sel.length ? "" : "disabled"}>Review${I("arrowR")}</button></div>` : ""}`;
+};
+function duesReview(){
+  const c = batchCalc();
+  const upiOk = c.gross <= 500000_00;
+  if (!upiOk && B.method === "upi") B.method = "nb";
+  const secs = {}; c.tdsLines.forEach(l => secs[l.d.tdsSec] = (secs[l.d.tdsSec]||0) + l.tds);
+  return `<div class="wizard">
+  <div class="page-h"><div><h1>One transaction, ${c.payouts.length} payments</h1><p>You approve one debit. XORPAY splits it and pays everyone below on the same day.</p></div><button class="btn link small" data-action="dues-back">Edit selection</button></div>
+  <section class="card"><div class="receipt">
+    ${c.by("bbps") ? `<div class="line"><span>Bills via BBPS (${c.lines.filter(l=>l.group==="bbps").length})</span><span>${inr(c.by("bbps"))}</span></div>` : ""}
+    ${c.by("vendor") ? `<div class="line"><span>Vendors & rent, after TDS (${c.lines.filter(l=>l.group==="vendor").length})</span><span>${inr(c.by("vendor"))}</span></div>` : ""}
+    ${c.tdsTotal ? `<div class="line"><span>TDS to Income Tax Dept (${Object.entries(secs).map(([k,v]) => `${k} ${inr0(v)}`).join(", ")})</span><span>${inr(c.tdsTotal)}</span></div>` : ""}
+    ${c.by("govt") ? `<div class="line"><span>GST, PF, ESI & professional tax (${c.lines.filter(l=>l.group==="govt").length})</span><span>${inr(c.by("govt"))}</span></div>` : ""}
+    <div class="line"><span>Card fee + GST</span><span>${c.fee ? inr(c.fee + c.gst) : "Free"}</span></div>
+    <div class="line total"><span>One debit of</span><span>${inr(c.total)}</span></div>
+  </div></section>
+  <section class="card"><h2>Pay with</h2><p class="ink2 small" style="margin:4px 0 16px">Net banking and UPI are free. Credit card costs 2% + GST and gives you up to 45 days to pay the bank.</p>
+    <div class="choices">${Object.entries(METHODS).map(([k,m]) => { const dis = k === "upi" && !upiOk; return `
+      <button class="choice ${k===B.method?"on":""}" data-action="dues-method" data-m="${k}" ${dis?"disabled style=\"opacity:.5;pointer-events:none\"":""}><span class="ico" style="${k==="card"?"":"background:var(--sky-soft);color:var(--sky)"}">${I(m.icon)}</span>
+        <div class="grow"><b>${m.label}</b><span>${dis ? "UPI allows up to ₹5 L per transaction" : m.perk}</span></div>
+        <span class="badge ${k==="card"?"b-brand":"b-ok"}">${m.fee}</span><span class="radio"></span></button>`; }).join("")}</div></section>
+  <div class="note ok">${I("shield")}<span>TDS challans, GST and EPFO/ESIC receipts are saved to Reports automatically. Form 16A data is ready for each vendor at quarter end.</span></div>
+  <div class="wiz-foot"><button class="btn" data-action="dues-back" aria-label="Back">${I("arrowL")}<span class="hide-sm">Back</span></button>
+    <div class="grow"><span class="muted small">One debit</span><b>${inr(c.total)}</b></div>
+    <button class="btn pri lg" data-action="dues-pay">Pay ${short(c.total)}</button></div></div>`;
+}
+function duesProcessing(){
+  const b = B.batch;
+  return `<div class="wizard">
+  <section class="card"><div class="done" id="batch-top">
+    ${B.step === "done" ? `<div class="check" style="margin:0 auto 6px">${I("check")}</div><p class="label">All ${b.items.length} payments done</p>` : `<p class="label" id="batch-label">Paying ${b.items.length} payees…</p>`}
+    <div class="money" style="font-size:40px">${inr(b.total)}</div>
+    <p class="muted small">One transaction · Batch ${b.id} · ${mLabel(b.method)}</p></div>
+    <div class="list" style="margin-top:8px">${b.items.map((it,i) => { const v = vendor(it.vid); const ok = B.step === "done"; return `
+      <div class="item bp ${ok?"ok":""}" data-i="${i}">${avatar(v)}<div class="grow"><b>${esc(v.name)}</b><span class="ref">${ok ? esc(it.refNo) : esc(it.via)}</span></div>
+        <div class="amt">${inr0(it.amount)}</div><span class="st-ic">${I("check")}</span></div>`; }).join("")}</div>
+    ${B.step === "done" ? `<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px"><a class="btn" href="#activity">View in Activity</a><a class="btn pri" href="#home" data-action="dues-finish">Back to home</a></div>` : ""}
+  </section></div>`;
+}
+function runBatch(){
+  const c = batchCalc(); S.seq++;
+  const id = "XB" + (70210 + S.seq);
+  const items = c.payouts.map((p,i) => {
+    const v = vendor(p.vid), q = c.qs[i];
+    const via = p.tds ? "Challan 281 via OLTAS" : p.cat === "utility" ? "BBPS" : p.cat === "gst" ? "GST PMT-06 challan" : p.cat === "pf" ? "EPFO ECR" : p.cat === "esi" ? "ESIC challan" : p.cat === "pt" ? "TS PT challan" : v.type === "upi" ? "UPI to " + v.vpa : "IMPS to " + destOf(v);
+    const n = 442000000000 + (S.seq*100 + i)*7919;
+    const refNo = p.tds || GOVT.includes(p.cat) ? "CIN " + (26110000000 + n % 9999999) : p.cat === "utility" ? "BBPS ref XB" + (n % 99999999) : "UTR " + n;
+    return { ...p, ...q, via, refNo };
+  });
+  B.batch = { id, items, method:B.method, total:c.total };
+  items.forEach(it => S.txns.unshift({ id:"XP" + (5300000 + S.seq*41 + items.indexOf(it)), date: ymd(T0), vid:it.vid, cat:it.cat, method:B.method, payee:it.payee, fee:it.fee, gst:it.gst, total:it.total, status:"Settled", ref:it.ref, utr:it.refNo.replace(/^\w+ /,""), coins:coinsFor(it.payee, B.method), batch:id }));
+  S.dues.forEach(d => { if (B.sel.includes(d.id)) d.paid = true; });
+  save();
+  B.step = "processing"; route();
+  let i = 0; const rows = () => document.querySelectorAll(".bp");
+  const tick = () => {
+    if (!$("#batch-top")) return;
+    rows().forEach((el,k) => { el.classList.toggle("ok", k < i); el.classList.toggle("act", k === i); if (k < i) el.querySelector(".ref").textContent = items[k].refNo; });
+    const lab = $("#batch-label"); if (lab) lab.textContent = `Paying ${Math.min(i+1, items.length)} of ${items.length}…`;
+    if (i < items.length){ i++; setTimeout(tick, 320); return; }
+    B.step = "done"; route();
+  };
+  tick();
 }
 
 /* ================= Pay wizard ================= */
@@ -868,7 +1032,7 @@ function txnModal(id){
   const v = vendor(t.vid);
   const text = [`XORPAY receipt ${t.id}`,`Date: ${fDY(t.date)}`,`Payee: ${v.name} (${destOf(v)})`,`For: ${CATS[t.cat].label} · ${t.ref}`,`Payee received: ${inr(t.payee)}`,`Card fee: ${inr(t.fee)} · GST on fee: ${inr(t.gst)}`,`Total charged: ${inr(t.total)} via ${mLabel(t.method)}`,`Status: ${t.status}${t.utr ? " · UTR " + t.utr : ""}`].join("\n");
   openModal(`
-    <div class="modal-h"><div style="display:flex;gap:12px;align-items:center;min-width:0">${avatar(v)}<div style="min-width:0"><h2>${esc(v.name)}</h2><p class="muted small">${fDY(t.date)}${t.auto ? " · paid by schedule" : ""}</p></div></div><button class="x" data-action="close" aria-label="Close">${I("x")}</button></div>
+    <div class="modal-h"><div style="display:flex;gap:12px;align-items:center;min-width:0">${avatar(v)}<div style="min-width:0"><h2>${esc(v.name)}</h2><p class="muted small">${fDY(t.date)}${t.auto ? " · paid by autopay" : ""}${t.batch ? " · part of one-transaction batch " + t.batch : ""}</p></div></div><button class="x" data-action="close" aria-label="Close">${I("x")}</button></div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap"><span class="money" style="font-size:34px">${inr(t.payee)}</span>${statusBadge(t.status)}</div>
     ${t.reason ? `<div class="note warn" style="margin-bottom:16px">${I("info")}<span>${esc(t.reason)}</span></div>` : ""}
     <div class="receipt">
@@ -877,7 +1041,7 @@ function txnModal(id){
       <div class="line"><span>Paid with</span><span>${mLabel(t.method)}</span></div>
       <div class="line"><span>Card fee + GST</span><span>${t.fee ? inr(t.fee + t.gst) : "Free"}</span></div>
       <div class="line total"><span>Total charged</span><span>${inr(t.total)}</span></div>
-      ${t.utr ? `<div class="line"><span>Bank reference (UTR)</span><span>${t.utr}</span></div>` : ""}
+      ${t.utr ? `<div class="line"><span>${GOVT.includes(t.cat) ? "Challan (CIN)" : t.cat === "utility" ? "BBPS reference" : "Bank reference (UTR)"}</span><span>${t.utr}</span></div>` : ""}
       ${t.coins ? `<div class="line"><span>XOR coins earned</span><span>+${t.coins}</span></div>` : ""}
       <div class="line"><span>Transaction ID</span><span>${t.id}</span></div>
     </div>
@@ -896,7 +1060,7 @@ V.reports = () => {
   const max = niceMax(Math.max(...months.map(m => m.amt)));
   const byCat = Object.keys(CATS).map(k => [k, rows.filter(t=>t.cat===k).reduce((s,t)=>s+t.payee,0)]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]);
   return `
-  <div class="page-h"><div><h1>Reports</h1><p>Spending, fees and GST in one place, ready for your accountant.</p></div>
+  <div class="page-h"><div><h1>Reports & compliance</h1><p>Spending, TDS, GST and statutory payments in one place, ready for your accountant.</p></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap"><div class="seg">${[3,6].map(m => `<button class="${m===RM?"on":""}" data-action="rm" data-m="${m}">${m} months</button>`).join("")}</div><button class="btn" data-action="csv">${I("copy")}Copy CSV</button></div></div>
   <div class="stats">
     <section class="card stat"><div class="label">Total paid</div><span class="money">${short(total)}</span><p>${rows.length} payments</p></section>
@@ -912,6 +1076,10 @@ V.reports = () => {
         ${months.map(m => `<div class="col" title="${m.full}: ${inr0(m.amt)}"><span class="tl">${short(m.amt)}</span>
           <div class="stack" style="height:calc(${(m.amt/max).toFixed(4)} * (100% - 22px))"><div style="flex:${m.card};background:var(--brand)"></div><div style="flex:${m.amt-m.card};background:#93C5FD"></div></div>
           <span class="xl">${m.label}</span></div>`).join("")}</div></div>
+  </section>
+  <section class="card"><div class="card-h" style="flex-wrap:wrap"><div><h2>Compliance register</h2><p class="muted small" style="margin-top:2px">Every government payment with its challan number, ready for your CA.</p></div></div>
+    <div class="tbl"><table style="min-width:560px"><thead><tr><th>Date</th><th>Type</th><th>Details</th><th>Challan / ref</th><th class="r">Amount</th></tr></thead>
+    <tbody>${rows.filter(t => GOVT.includes(t.cat)).slice(0,10).map(t => `<tr><td>${fD(t.date)}</td><td><span class="badge b-mute">${CATS[t.cat].short}</span></td><td class="ink2 small">${esc(t.ref)}</td><td class="small" style="font-family:ui-monospace,monospace">${esc(t.utr || "—")}</td><td class="r" style="font-weight:600">${inr0(t.payee)}</td></tr>`).join("")}</tbody></table></div>
   </section>
   <div class="two">
     <section class="card"><div class="card-h"><h2>By category</h2></div>
@@ -961,23 +1129,23 @@ A.plans = () => {
 V.about = () => `
   <section class="about-hero">
     <div class="label">BARG Info Solutions Pvt. Ltd.</div>
-    <h1>One place for every payment a small business makes.</h1>
-    <p>XORPAY is a web platform where MSMEs pay vendors, rent, GST, TDS, salaries and bills by UPI, net banking or credit card. Payments can be scheduled, every payee is verified first, and reports are ready for the accountant.</p>
+    <h1>Every business payment and compliance, in one transaction.</h1>
+    <p>XORPAY collects an MSME's BBPS bills, vendor invoices, rent, GST, TDS, PF, ESI and professional tax in one list. The owner approves a single debit by net banking, UPI or credit card, and XORPAY splits it to every biller, vendor and government portal, deducting TDS automatically and keeping every challan for the accountant.</p>
     <div class="facts"><div><span>For</span><b>MSMEs, ₹10 L to ₹250 Cr</b></div><div><span>Revenue</span><b>Subscription by turnover</b></div><div><span>Seed ask</span><b>₹5,00,000 · 6 months</b></div></div>
-    <div style="margin-top:28px;display:flex;gap:10px;flex-wrap:wrap"><a class="btn pri lg" href="#pay">Try a payment</a><a class="btn lg ghost-w" href="#home">See the dashboard</a></div>
+    <div style="margin-top:28px;display:flex;gap:10px;flex-wrap:wrap"><a class="btn pri lg" href="#dues">Try paying all dues</a><a class="btn lg ghost-w" href="#home">See the dashboard</a></div>
   </section>
   <div class="three">
-    <section class="card"><span class="badge b-err">The problem</span><h2 style="margin-top:12px">Payments are scattered</h2><ul class="bul"><li>Vendors on the bank portal, GST on the GST portal, rent by cheque, bills in other apps.</li><li>Missed due dates mean late fees and GST interest.</li><li>Most vendors can't take cards, so cash stays tied up.</li></ul></section>
-    <section class="card"><span class="badge b-brand">Our solution</span><h2 style="margin-top:12px">One payments dashboard</h2><ul class="bul"><li>Pay anyone by UPI or net banking for free, or by card for 45 days of credit.</li><li>Schedules for rent, GST, TDS and salaries.</li><li>Verified vendors, GST reports and CSV export.</li></ul></section>
+    <section class="card"><span class="badge b-err">The problem</span><h2 style="margin-top:12px">Payments are scattered</h2><ul class="bul"><li>Bills on BBPS apps, vendors on the bank portal, GST on the GST portal, TDS on OLTAS, PF on EPFO: five logins, a dozen transactions every month.</li><li>TDS is often missed or wrongly calculated, which brings interest and penalties.</li><li>Missed due dates mean late fees, and most vendors can't take cards.</li></ul></section>
+    <section class="card"><span class="badge b-brand">Our solution</span><h2 style="margin-top:12px">One transaction for everything</h2><ul class="bul"><li>All dues in one list: BBPS bills, invoices, rent, GST, PF, ESI, professional tax.</li><li>TDS (194C, 194J, 194I) deducted automatically and paid to the government in the same transaction.</li><li>One debit by net banking, UPI or card. Autopay for recurring dues.</li></ul></section>
     <section class="card"><span class="badge b-ok">Business model</span><h2 style="margin-top:12px">Subscription by turnover</h2><ul class="bul">${PLANS.map(p => `<li>${p.name} · ${p.band} · ${p.price ? "₹" + nf0.format(p.price) + "/mo" : "custom"}</li>`).join("")}<li>Plus 2% + GST on credit-card payments only.</li></ul></section>
   </div>
   <section class="card"><div class="card-h" style="flex-wrap:wrap"><h2>How the money moves</h2><span class="badge b-mute">XORPAY never holds funds</span></div>
     <div class="flow">
-      <div class="node"><b>Business</b><span>Pays by UPI, net banking or card on XORPAY</span></div>
+      <div class="node"><b>Business</b><span>Approves one debit for all selected dues</span></div>
       <div class="arrow">Collect${I("arrowR")}</div>
-      <div class="node mid"><b>Cashfree (RBI-authorised)</b><span>Collects into a regulated escrow account and sends payouts</span></div>
-      <div class="arrow">IMPS / UPI${I("arrowR")}</div>
-      <div class="node"><b>Vendor's bank</b><span>Receives the full amount with a bank reference</span></div>
+      <div class="node mid"><b>Cashfree (RBI-authorised)</b><span>Collects into a regulated escrow account, then splits it</span></div>
+      <div class="arrow">Split ${I("arrowR")}</div>
+      <div class="node"><b>Every payee</b><span>Billers via BBPS, vendors via IMPS/UPI, GST, TDS, EPFO and ESIC via challans</span></div>
     </div></section>
   <div class="two">
     <section class="card"><div class="card-h"><h2>What's already built</h2><span class="badge b-ok">Working code</span></div><ul class="bul" style="margin:0">
@@ -985,7 +1153,7 @@ V.about = () => `
       <li>KYC with PAN, Aadhaar, selfie and GSTIN checks.</li>
       <li>Payee verification, notifications and support tickets.</li>
       <li>Admin console for KYC review, refunds, reconciliation and reports.</li>
-      <li>This web dashboard prototype.</li></ul></section>
+      <li>This web prototype: one-transaction dues, auto TDS, BBPS bills, autopay and compliance reports.</li></ul></section>
     <section class="card"><div class="card-h"><h2>Use of seed funds</h2><b class="money" style="font-size:18px">₹5,00,000</b></div>
       ${[["Product development",200000],["Bank & gateway setup",100000],["Cloud & security",75000],["Pilot with MSMEs",75000],["Admin & compliance",50000]].map(([l,v]) => `<div class="hbar"><span class="ink2 small">${l}</span><div class="t"><i style="width:${v/2000}%"></i></div><span class="v small">₹${nf0.format(v)}</span></div>`).join("")}</section>
   </div>
@@ -1001,7 +1169,7 @@ let tt; function toast(m){ const t = $("#toast"); t.textContent = m; t.classList
 async function copy(text){ try { await navigator.clipboard.writeText(text); toast("Copied"); } catch(e){ openModal(`<div class="modal-h"><h2>Copy this text</h2><button class="x" data-action="close" aria-label="Close">${I("x")}</button></div><textarea class="input" style="height:240px;font-size:12px;font-family:ui-monospace,monospace" id="copy-ta" aria-label="Text to copy">${esc(text)}</textarea>`); const ta = $("#copy-ta"); ta.focus(); ta.select(); } }
 function moreSheet(){
   openModal(`<div class="modal-h"><h2>More</h2><button class="x" data-action="close" aria-label="Close">${I("x")}</button></div>
-    <div class="choices">${[["vendors","Vendors","users"],["reports","Reports","chart"],["plans","Plans & pricing","layers"],["about","About XORPAY","info"]].map(([h,l,i]) => `<a class="choice" href="#${h}" data-action="close" style="text-decoration:none;color:inherit"><span class="ico">${I(i)}</span><div class="grow"><b>${l}</b></div>${I("arrowR",'style="width:18px;height:18px;color:var(--muted)"')}</a>`).join("")}</div>`);
+    <div class="choices">${[["pay","Single payment","send"],["vendors","Vendors","users"],["reports","Reports & compliance","chart"],["plans","Plans & pricing","layers"],["about","About XORPAY","info"]].map(([h,l,i]) => `<a class="choice" href="#${h}" data-action="close" style="text-decoration:none;color:inherit"><span class="ico">${I(i)}</span><div class="grow"><b>${l}</b></div>${I("arrowR",'style="width:18px;height:18px;color:var(--muted)"')}</a>`).join("")}</div>`);
 }
 
 /* ================= events ================= */
@@ -1012,8 +1180,15 @@ document.addEventListener("click", e => {
   const id = a.dataset.id;
   switch (a.dataset.action){
     case "close": closeModal(); break;
+    case "go-dues": B = null; go("dues"); break;
+    case "sel-all": { const od = openDues(); B.sel = B.sel.length === od.length ? [] : od.map(d => d.id); route(); break; }
+    case "dues-review": B.step = "review"; route(); break;
+    case "dues-back": B.step = "select"; route(); break;
+    case "dues-method": B.method = a.dataset.m; route(); break;
+    case "dues-pay": runBatch(); break;
+    case "dues-finish": B = null; break;
     case "more": moreSheet(); break;
-    case "reset": try { localStorage.removeItem(KEY); } catch(_){} S = seed(); S.v = T0.toDateString(); W = null; save(); route(); toast("Demo data reset"); break;
+    case "reset": try { localStorage.removeItem(KEY); } catch(_){} S = seed(); S.v = T0.toDateString(); W = null; B = null; save(); route(); toast("Demo data reset"); break;
     case "hide-tip": S.tipHidden = true; save(); route(); break;
     case "start-pay": W = newW({ cat:a.dataset.cat }); go("pay"); break;
     case "new-schedule": W = newW({ mode:"schedule" }); go("pay"); break;
@@ -1045,12 +1220,17 @@ document.addEventListener("click", e => {
     case "choose-plan": { const p = PLANS.find(x => x.id === id); if (p.price == null){ toast("Our team will reach out about Enterprise"); break; } S.plan = id; save(); route(); toast(`You're on the ${p.name} plan`); break; }
   }
 });
+document.addEventListener("change", e => {
+  const id = e.target.dataset && e.target.dataset.due; if (!id) return;
+  B.sel = e.target.checked ? [...new Set([...B.sel, id])] : B.sel.filter(x => x !== id);
+  const y = window.scrollY; route(); window.scrollTo({ top:y });
+});
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") closeModal();
   if ((e.key === "Enter" || e.key === " ") && e.target.matches('[role="button"][data-action]')) { e.preventDefault(); e.target.click(); }
   if (e.key === "Enter" && e.target.id === "f-amt" && $("#next2") && !$("#next2").disabled) $("#next2").click();
 });
-window.addEventListener("hashchange", () => { if (location.hash !== "#pay" && W && W.done) W = null; route(); });
+window.addEventListener("hashchange", () => { if (location.hash !== "#pay" && W && W.done) W = null; if (location.hash !== "#dues" && B && B.step === "done") B = null; route(); });
 route();
 })();
 </script>
